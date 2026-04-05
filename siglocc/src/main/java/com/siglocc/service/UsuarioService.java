@@ -11,6 +11,13 @@ import com.siglocc.repository.UsuarioRepository;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 
+/**
+ * Servicio que contiene la lógica de negocio para la gestión de usuarios.
+ *
+ * <p>Actualmente gestiona el registro de nuevos usuarios. Solo los roles
+ * {@code ENL_RECURSOS} y {@code ENL_LOGISTICA} pueden crear usuarios;
+ * esa restricción se aplica en el controlador con {@code @PreAuthorize}.</p>
+ */
 @Service
 public class UsuarioService {
 
@@ -29,6 +36,21 @@ public class UsuarioService {
         this.passwordEncoder = passwordEncoder;
     }
 
+    /**
+     * Registra un nuevo usuario en el sistema.
+     *
+     * <p>Pasos que ejecuta:</p>
+     * <ol>
+     *   <li>Verifica que el email no esté ya registrado.</li>
+     *   <li>Valida que existan el rol y el equipo indicados en el request.</li>
+     *   <li>Hashea la contraseña con BCrypt antes de persistirla.</li>
+     *   <li>Guarda el usuario y retorna un DTO con la información no sensible.</li>
+     * </ol>
+     *
+     * @param request datos del nuevo usuario enviados desde el Front-end
+     * @return DTO con los datos del usuario creado (sin contraseña)
+     * @throws IllegalArgumentException si el email ya existe, o si el rol/equipo no se encuentran
+     */
     public UsuarioResponse registrar(RegistroRequest request) {
         if (usuarioRepository.findByEmail(request.email()).isPresent()) {
             throw new IllegalArgumentException("El email ya está registrado: " + request.email());
@@ -44,7 +66,7 @@ public class UsuarioService {
         usuario.setName(request.name());
         usuario.setLastname(request.lastname());
         usuario.setEmail(request.email());
-        usuario.setPassword(passwordEncoder.encode(request.password()));
+        usuario.setPassword(passwordEncoder.encode(request.password())); // Nunca se guarda en texto plano
         usuario.setRol(rol);
         usuario.setEquipo(equipo);
 
