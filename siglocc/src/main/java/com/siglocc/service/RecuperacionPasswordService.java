@@ -4,6 +4,7 @@ import com.siglocc.entity.TokenRecuperacion;
 import com.siglocc.entity.Usuario;
 import com.siglocc.repository.TokenRecuperacionRepository;
 import com.siglocc.repository.UsuarioRepository;
+import edu.umd.cs.findbugs.annotations.SuppressFBWarnings;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
@@ -57,6 +58,7 @@ public class RecuperacionPasswordService {
     @Value("${app.frontend.url:http://localhost:4200}")
     private String frontendUrl;
 
+    @SuppressFBWarnings(value = "EI_EXPOSE_REP2", justification = "TokenRecuperacionRepository es un bean singleton gestionado por Spring; no es posible ni necesario hacer copia defensiva.")
     public RecuperacionPasswordService(TokenRecuperacionRepository tokenRepo,
                                        UsuarioRepository usuarioRepo,
                                        EmailService emailService,
@@ -109,13 +111,13 @@ public class RecuperacionPasswordService {
                     usuario.getEmail(),
                     "SIGLOCC - Restablecimiento de contraseña",
                     String.format(
-                            "Hola %s,\n\n" +
-                            "Recibimos una solicitud para restablecer la contraseña de tu cuenta.\n\n" +
+                            "Hola %s,%n%n" +
+                            "Recibimos una solicitud para restablecer la contraseña de tu cuenta.%n%n" +
                             "Haz clic en el siguiente enlace para crear una nueva contraseña " +
-                            "(válido por 30 minutos):\n\n%s\n\n" +
+                            "(válido por 30 minutos):%n%n%s%n%n" +
                             "Si no solicitaste este cambio, puedes ignorar este correo. " +
-                            "Tu contraseña actual seguirá siendo la misma.\n\n" +
-                            "Saludos,\nEquipo SIGLOCC",
+                            "Tu contraseña actual seguirá siendo la misma.%n%n" +
+                            "Saludos,%nEquipo SIGLOCC",
                             usuario.getName(), enlace
                     )
             );

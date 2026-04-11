@@ -131,7 +131,7 @@ public class AnticipoService {
                     emailService.enviar(
                             emailSolicitante,
                             "SIGLOCC - Solicitud rechazada: " + tituloSolicitud,
-                            String.format("Hola %s,\n\nTu solicitud '%s' ha sido rechazada automáticamente.\n\nMotivo: %s\n\nSaludos,\nSIGLOCC",
+                            String.format("Hola %s,%n%nTu solicitud '%s' ha sido rechazada automáticamente.%n%nMotivo: %s%n%nSaludos,%nSIGLOCC",
                                     nombreSolicitante, tituloSolicitud, mensaje)
                     );
                 }
@@ -164,7 +164,7 @@ public class AnticipoService {
                 emailService.enviar(
                         emailSolicitante,
                         "SIGLOCC - Solicitud recibida: " + tituloSolicitud,
-                        String.format("Hola %s,\n\nTu solicitud '%s' por $%,.0f ha sido recibida y está pendiente de aprobación.\n\nSaludos,\nSIGLOCC",
+                        String.format("Hola %s,%n%nTu solicitud '%s' por $%,.0f ha sido recibida y está pendiente de aprobación.%n%nSaludos,%nSIGLOCC",
                                 nombreSolicitante, tituloSolicitud, monto)
                 );
 
@@ -173,7 +173,7 @@ public class AnticipoService {
                     emailService.enviar(
                             emailAprobador,
                             "SIGLOCC - Nueva solicitud pendiente: " + tituloSolicitud,
-                            String.format("Hola %s,\n\nHay una nueva solicitud de anticipo pendiente de tu aprobación.\n\nSolicitante: %s %s\nTítulo: %s\nMonto: $%,.0f\nTipo: %s\n\nIngresa al sistema para aprobar o rechazar.\n\nSaludos,\nSIGLOCC",
+                            String.format("Hola %s,%n%nHay una nueva solicitud de anticipo pendiente de tu aprobación.%n%nSolicitante: %s %s%nTítulo: %s%nMonto: $%,.0f%nTipo: %s%n%nIngresa al sistema para aprobar o rechazar.%n%nSaludos,%nSIGLOCC",
                                     nombreAprobador, nombreSolicitante, apellidoSolicitante,
                                     tituloSolicitud, monto, tipo)
                     );
@@ -232,7 +232,7 @@ public class AnticipoService {
                         emailService.enviar(
                                 solicitante.getEmail(),
                                 "SIGLOCC - Solicitud aprobada: " + tituloSolicitud,
-                                String.format("Hola %s,\n\nTu solicitud '%s' por $%,.0f ha sido aprobada.\n\nFecha de aprobación: %s\n\nSaludos,\nSIGLOCC",
+                                String.format("Hola %s,%n%nTu solicitud '%s' por $%,.0f ha sido aprobada.%n%nFecha de aprobación: %s%n%nSaludos,%nSIGLOCC",
                                         solicitante.getName(), tituloSolicitud, monto, fechaAprobacion)
                         )
                 );

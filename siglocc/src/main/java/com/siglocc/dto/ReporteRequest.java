@@ -32,4 +32,12 @@ public record ReporteRequest(
         Integer mes,
         Integer anio,
         List<ReporteDetalleRequest> detalles
-) {}
+) {
+    /**
+     * Constructor compacto que hace una copia defensiva de la lista de detalles.
+     * Evita que el llamador pueda modificar el contenido del DTO tras la construcción.
+     */
+    public ReporteRequest {
+        detalles = List.copyOf(detalles);
+    }
+}

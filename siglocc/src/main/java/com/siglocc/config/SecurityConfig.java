@@ -1,6 +1,7 @@
 package com.siglocc.config;
 
 import com.siglocc.security.JwtAuthFilter;
+import edu.umd.cs.findbugs.annotations.SuppressFBWarnings;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.http.HttpMethod;
@@ -62,6 +63,7 @@ public class SecurityConfig {
     private final JwtAuthFilter jwtAuthFilter;
     private final UserDetailsService userDetailsService;
 
+    @SuppressFBWarnings(value = "EI_EXPOSE_REP2", justification = "JwtAuthFilter y UserDetailsService son beans singleton gestionados por Spring; no es posible ni necesario hacer copias defensivas.")
     public SecurityConfig(JwtAuthFilter jwtAuthFilter, UserDetailsService userDetailsService) {
         this.jwtAuthFilter = jwtAuthFilter;
         this.userDetailsService = userDetailsService;

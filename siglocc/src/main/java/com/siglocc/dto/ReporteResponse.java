@@ -47,4 +47,12 @@ public record ReporteResponse(
         Integer aprobadorEnlId,
         List<ReporteDetalleResponse> detalles,
         BigDecimal montoTotal
-) {}
+) {
+    /**
+     * Constructor compacto que hace una copia defensiva de la lista de detalles.
+     * Evita que el llamador pueda modificar el contenido del DTO tras la construcción.
+     */
+    public ReporteResponse {
+        detalles = List.copyOf(detalles);
+    }
+}

@@ -4,6 +4,7 @@ import com.siglocc.dto.*;
 import com.siglocc.entity.*;
 import com.siglocc.repository.*;
 import com.siglocc.security.JwtAuthDetails;
+import edu.umd.cs.findbugs.annotations.SuppressFBWarnings;
 import org.springframework.security.core.Authentication;
 import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.stereotype.Service;
@@ -53,6 +54,7 @@ public class ReporteService {
     private final UsuarioRepository usuarioRepo;
     private final StorageService storageService;
 
+    @SuppressFBWarnings(value = "EI_EXPOSE_REP2", justification = "Todos los parámetros son beans singleton gestionados por Spring; no es posible ni necesario hacer copias defensivas.")
     public ReporteService(ReporteMensualRepository reporteRepo,
                           ReporteDetalleRepository detalleRepo,
                           ReporteCategoriaRepository categoriaRepo,
