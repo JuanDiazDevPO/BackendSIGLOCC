@@ -144,7 +144,7 @@ public class PresupuestoService {
                 procesados++;
 
                 try {
-                    procesarFilaCsv(linea, numeroFila);
+                    procesarFilaCsv(linea);
                     exitosos++;
                 } catch (Exception e) {
                     errores.add("Fila " + numeroFila + ": " + e.getMessage());
