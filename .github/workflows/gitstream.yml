@@ -1,0 +1,20 @@
+name: gitStream workflow automation
+
+on:
+  pull_request:
+  pull_request_review:
+  pull_request_review_comment:
+  issue_comment:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pull-requests: write
+  issues: write
+  statuses: write
+
+jobs:   
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: linear-b/gitstream-github-action@v3s
