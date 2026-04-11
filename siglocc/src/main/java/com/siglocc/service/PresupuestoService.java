@@ -144,7 +144,7 @@ public class PresupuestoService {
                 procesados++;
 
                 try {
-                    procesarFilaCsv(linea, numeroFila);
+                    procesarFilaCsv(linea);
                     exitosos++;
                 } catch (Exception e) {
                     errores.add("Fila " + numeroFila + ": " + e.getMessage());
@@ -169,7 +169,7 @@ public class PresupuestoService {
      * @throws IllegalArgumentException si los datos son inválidos o los prerequisitos no se cumplen
      * @throws NumberFormatException    si algún campo no tiene formato numérico correcto
      */
-    private void procesarFilaCsv(String linea, int numeroFila) {
+    private void procesarFilaCsv(String linea) {
         String[] campos = linea.split(",", -1);
 
         if (campos.length != 11) {
