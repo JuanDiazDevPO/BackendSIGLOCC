@@ -8,6 +8,7 @@ import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.StandardCopyOption;
+import java.util.Set;
 
 /**
  * Servicio encargado del almacenamiento físico de archivos de soporte (PDF/ZIP)
@@ -54,11 +55,16 @@ public class StorageService {
      * @throws IllegalStateException si ocurre un error de I/O al escribir el archivo
      */
     public String almacenarSoporte(MultipartFile archivo, Integer equipoId, Integer mes, Integer anio) {
-        // Extraer extensión del archivo original (.pdf, .zip, etc.)
+        // Extraer y validar extensión del archivo original (solo .pdf o .zip)
         String nombreOriginal = archivo.getOriginalFilename();
-        String extension = "";
-        if (nombreOriginal != null && nombreOriginal.contains(".")) {
-            extension = nombreOriginal.substring(nombreOriginal.lastIndexOf(".")).toLowerCase();
+        if (nombreOriginal == null || !nombreOriginal.contains(".")) {
+            throw new IllegalArgumentException("El archivo debe tener una extensión válida (.pdf o .zip).");
+        }
+
+        String extension = nombreOriginal.substring(nombreOriginal.lastIndexOf(".")).toLowerCase();
+        Set<String> extensionesPermitidas = Set.of(".pdf", ".zip");
+        if (!extensionesPermitidas.contains(extension)) {
+            throw new IllegalArgumentException("Extensión no permitida. Solo se aceptan archivos PDF o ZIP.");
         }
 
         // Nombre estandarizado según la convención del proyecto
