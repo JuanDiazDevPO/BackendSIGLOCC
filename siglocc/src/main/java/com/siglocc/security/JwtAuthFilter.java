@@ -88,6 +88,7 @@ public class JwtAuthFilter extends OncePerRequestFilter {
         } catch (Exception e) {
             // Token inválido o expirado: se continúa sin autenticación.
             // Spring Security rechazará el acceso si el endpoint lo requiere.
+            logger.warn("Error validating JWT", e);
         }
 
         chain.doFilter(request, response);
