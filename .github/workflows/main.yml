@@ -18,6 +18,14 @@ jobs:
       run:
         working-directory: siglocc
 
+    env:
+      SPRING_PROFILES_ACTIVE: test
+      MAIL_HOST: ${{ secrets.MAIL_HOST }}
+      MAIL_PORT: ${{ secrets.MAIL_PORT }}
+      MAIL_USERNAME: ${{ secrets.MAIL_USERNAME }}
+      MAIL_PASSWORD: ${{ secrets.MAIL_PASSWORD }}
+      
+
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -31,4 +39,4 @@ jobs:
           cache-dependency-path: siglocc/pom.xml
 
       - name: Build, test, and static analysis
-        run: mvn -B clean verify
+        run: mvn -B clean verify -Dspring.profiles.active=test
