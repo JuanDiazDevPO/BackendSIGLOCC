@@ -1,0 +1,27 @@
+manifest:
+  version: 1.0
+
+automations:
+  pr_auto_review:
+    on:
+      - pull_request.opened
+      - pull_request.synchronize
+
+    if:
+      - true  # aplica siempre
+
+    run:
+      - action: add_reviewers
+        args:
+          reviewers:
+            - team: backend-team
+
+      - action: comment
+        args:
+          comment: |
+            🤖 Auto Code Review iniciado
+
+            Checklist:
+            - ¿Cumple estándares de código?
+            - ¿Tiene tests?
+            - ¿No rompe flujos existentes?
