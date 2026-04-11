@@ -89,14 +89,16 @@ public class SecurityConfig {
             .httpBasic(AbstractHttpConfigurer::disable)
             .sessionManagement(session -> session.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
             .authorizeHttpRequests(auth -> auth
-                .requestMatchers(HttpMethod.POST, "/api/auth/login").permitAll()   // Login público
-                .requestMatchers(HttpMethod.OPTIONS, "/**").permitAll()              // Preflight CORS
+                .requestMatchers(HttpMethod.POST, "/api/auth/login").permitAll()                  // Login público
+                .requestMatchers(HttpMethod.POST, "/api/auth/recuperar-password").permitAll()     // Solicitud de recuperación
+                .requestMatchers(HttpMethod.POST, "/api/auth/restablecer-password").permitAll()   // Confirmación con token
+                .requestMatchers(HttpMethod.OPTIONS, "/**").permitAll()                            // Preflight CORS
                 .requestMatchers(
                     "/swagger-ui/**",
                     "/swagger-ui.html",
                     "/v3/api-docs/**"
-                ).permitAll()                                                        // Documentación pública
-                .anyRequest().authenticated()                                        // Todo lo demás requiere token
+                ).permitAll()                                                                      // Documentación pública
+                .anyRequest().authenticated()                                                      // Todo lo demás requiere token
             )
             .exceptionHandling(ex -> ex
                 // Retornar 401 cuando el usuario no está autenticado (en lugar del 403 por defecto)
