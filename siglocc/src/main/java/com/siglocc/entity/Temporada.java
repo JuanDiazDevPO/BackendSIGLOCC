@@ -46,6 +46,7 @@ public class Temporada {
 
     public Integer getId() { return id; }
     public String getNombre() { return nombre; }
+    public void setNombre(String nombre) { this.nombre = nombre; }
     public LocalDate getFechaInicio() { return fechaInicio; }
     public LocalDate getFechaFin() { return fechaFin; }
     public boolean isEsActual() { return esActual; }

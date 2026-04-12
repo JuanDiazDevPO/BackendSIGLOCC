@@ -19,4 +19,13 @@ public record CargaMasivaResponse(
         int exitosos,
         int fallidos,
         List<String> errores
-) {}
+) {
+    /**
+     * Constructor compacto que hace una copia defensiva de la lista de errores.
+     * Esto garantiza que el llamador no pueda mutar el estado interno del DTO
+     * después de la construcción.
+     */
+    public CargaMasivaResponse {
+        errores = List.copyOf(errores);
+    }
+}

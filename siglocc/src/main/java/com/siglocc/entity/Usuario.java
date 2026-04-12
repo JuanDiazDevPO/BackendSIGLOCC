@@ -1,5 +1,6 @@
 package com.siglocc.entity;
 
+import edu.umd.cs.findbugs.annotations.SuppressFBWarnings;
 import jakarta.persistence.*;
 
 /**
@@ -85,10 +86,16 @@ public class Usuario {
     public String getEmail() { return email; }
     public void setEmail(String email) { this.email = email; }
 
+    @SuppressFBWarnings(value = "EI_EXPOSE_REP", justification = "Entidad JPA gestionada por Hibernate; la copia defensiva rompería el seguimiento de cambios del contexto de persistencia.")
     public Rol getRol() { return rol; }
+
+    @SuppressFBWarnings(value = "EI_EXPOSE_REP2", justification = "Entidad JPA gestionada por Hibernate; la copia defensiva rompería la identidad de entidad requerida por el contexto de persistencia.")
     public void setRol(Rol rol) { this.rol = rol; }
 
+    @SuppressFBWarnings(value = "EI_EXPOSE_REP", justification = "Entidad JPA gestionada por Hibernate; la copia defensiva rompería el seguimiento de cambios del contexto de persistencia.")
     public Equipo getEquipo() { return equipo; }
+
+    @SuppressFBWarnings(value = "EI_EXPOSE_REP2", justification = "Entidad JPA gestionada por Hibernate; la copia defensiva rompería la identidad de entidad requerida por el contexto de persistencia.")
     public void setEquipo(Equipo equipo) { this.equipo = equipo; }
 
     public boolean isActivo() { return activo; }
