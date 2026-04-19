@@ -233,6 +233,129 @@ public class ReporteService {
     }
 
     // ─────────────────────────────────────────────────────────────────────────
+    // EDITAR REPORTE RECHAZADO
+    // ─────────────────────────────────────────────────────────────────────────
+
+    /**
+     * Corrige los rubros de un reporte rechazado y lo devuelve a estado
+     * {@link EstadoReporte#BORRADOR} para que el ERL pueda adjuntar un nuevo
+     * soporte y reiniciar el flujo de aprobación.
+     *
+     * <p><strong>Solo opera sobre reportes en estado {@link EstadoReporte#RECHAZADO}.</strong>
+     * Intentar editar un reporte en cualquier otro estado lanza
+     * {@link IllegalStateException}.</p>
+     *
+     * <p><strong>Qué se modifica:</strong></p>
+     * <ul>
+     *   <li>Los detalles anteriores se eliminan y se reemplazan por los nuevos.</li>
+     *   <li>{@code urlSoporte} se borra — el soporte anterior ya no refleja los
+     *       montos corregidos; el ERL debe subir uno nuevo.</li>
+     *   <li>{@code estado} vuelve a {@link EstadoReporte#BORRADOR}.</li>
+     *   <li>{@code aprobadorErleId} y {@code aprobadorEnlId} se limpian.</li>
+     *   <li>{@code fechaAprobacionFinal} se limpia.</li>
+     * </ul>
+     *
+     * <p><strong>Qué se conserva:</strong></p>
+     * <ul>
+     *   <li>{@code observaciones} del rechazo — el ERL puede ver el motivo
+     *       mientras corrige los datos.</li>
+     *   <li>El período ({@code mes}, {@code anio}, {@code temporadaId}) y el
+     *       {@code equipoId} no cambian.</li>
+     * </ul>
+     *
+     * @param id      ID del reporte a corregir
+     * @param request nueva lista de rubros con montos corregidos
+     * @return respuesta actualizada con el reporte en estado BORRADOR
+     * @throws IllegalArgumentException si el reporte no existe, alguna categoría
+     *                                  no existe, un ERL usa familia no permitida
+     *                                  o los montos superan el saldo disponible
+     * @throws IllegalStateException    si el usuario no es dueño del reporte o
+     *                                  el reporte no está en estado RECHAZADO
+     */
+    @Transactional
+    public ReporteResponse editarReporte(Integer id, EditarReporteRequest request) {
+        JwtAuthDetails details = obtenerDetails();
+        Integer equipoId  = details.equipoId();
+        String equipoTipo = details.equipoTipo();
+
+        ReporteMensual reporte = reporteRepo.findById(id)
+                .orElseThrow(() -> new IllegalArgumentException(
+                        "Reporte no encontrado con id: " + id));
+
+        // Control de acceso: solo el equipo dueño puede corregir su reporte
+        if (!reporte.getEquipoId().equals(equipoId)) {
+            throw new IllegalStateException(
+                    "No tiene permisos para editar el reporte " + id +
+                    ". Solo el equipo propietario puede corregirlo.");
+        }
+
+        // Solo se pueden editar reportes rechazados
+        if (reporte.getEstado() != EstadoReporte.RECHAZADO) {
+            throw new IllegalStateException(
+                    "Solo se pueden editar reportes en estado RECHAZADO. " +
+                    "Estado actual: " + reporte.getEstado().name());
+        }
+
+        // Validar categorías y acumular totales por bucket presupuestal
+        List<ReporteDetalle> nuevosDetalles   = new ArrayList<>();
+        BigDecimal totalEntrenamiento         = BigDecimal.ZERO;
+        BigDecimal totalMentoreoOtros         = BigDecimal.ZERO;
+
+        for (ReporteDetalleRequest dr : request.detalles()) {
+            ReporteCategoria categoria = categoriaRepo.findById(dr.categoriaCodigo())
+                    .orElseThrow(() -> new IllegalArgumentException(
+                            "Categoría no encontrada: '" + dr.categoriaCodigo() + "'. " +
+                            "Verifique que el código exista en la tabla reporte_categorias."));
+
+            if ("ERL".equals(equipoTipo) && categoria.getFamilia() != FamiliaCategoria.E) {
+                throw new IllegalArgumentException(
+                        "El equipo ERL solo puede reportar categorías de la familia 'E'. " +
+                        "La categoría '" + dr.categoriaCodigo() + "' pertenece a la familia '" +
+                        categoria.getFamilia().name() + "'.");
+            }
+
+            if (dr.montoGastado() == null || dr.montoGastado().compareTo(BigDecimal.ZERO) < 0) {
+                throw new IllegalArgumentException(
+                        "El monto gastado para la categoría '" + dr.categoriaCodigo() +
+                        "' debe ser mayor o igual a cero.");
+            }
+
+            if (categoria.getFamilia() == FamiliaCategoria.E) {
+                totalEntrenamiento = totalEntrenamiento.add(dr.montoGastado());
+            } else {
+                totalMentoreoOtros = totalMentoreoOtros.add(dr.montoGastado());
+            }
+
+            ReporteDetalle detalle = new ReporteDetalle();
+            detalle.setCategoriaCodigo(dr.categoriaCodigo());
+            detalle.setMontoGastado(dr.montoGastado());
+            nuevosDetalles.add(detalle);
+        }
+
+        // Validar techo presupuestal con los montos corregidos
+        validarTechoPresupuestal(equipoId, reporte.getTemporadaId(),
+                totalEntrenamiento, totalMentoreoOtros);
+
+        // Reemplazar detalles: eliminar los anteriores y guardar los nuevos
+        detalleRepo.deleteByReporteId(id);
+        for (ReporteDetalle detalle : nuevosDetalles) {
+            detalle.setReporteId(id);
+            detalleRepo.save(detalle);
+        }
+
+        // Resetear el cabezote a BORRADOR
+        reporte.setEstado(EstadoReporte.BORRADOR);
+        reporte.setUrlSoporte(null);              // El soporte anterior ya no es válido
+        reporte.setAprobadorErleId(null);         // Limpiar auditoría del ciclo anterior
+        reporte.setAprobadorEnlId(null);
+        reporte.setFechaAprobacionFinal(null);
+        // Las observaciones se conservan para que el ERL sepa qué corregir
+        reporteRepo.save(reporte);
+
+        return construirResponse(reporte, nuevosDetalles);
+    }
+
+    // ─────────────────────────────────────────────────────────────────────────
     // LISTAR REPORTES
     // ─────────────────────────────────────────────────────────────────────────
 
