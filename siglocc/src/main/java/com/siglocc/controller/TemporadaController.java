@@ -10,7 +10,6 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
 import java.util.List;
-import java.util.Map;
 
 /**
  * Controlador REST para consulta de temporadas operativas.
@@ -61,11 +60,6 @@ public class TemporadaController {
                 .orElseThrow(() -> new IllegalStateException(
                         "No hay ninguna temporada marcada como actual en el sistema."));
         return ResponseEntity.ok(toResponse(actual));
-    }
-
-    @ExceptionHandler(IllegalStateException.class)
-    public ResponseEntity<Map<String, String>> handleIllegalState(IllegalStateException ex) {
-        return ResponseEntity.status(409).body(Map.of("error", ex.getMessage()));
     }
 
     // ─────────────────────────────────────────────────────────────────────────

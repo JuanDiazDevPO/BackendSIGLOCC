@@ -18,7 +18,6 @@ import org.springframework.web.bind.annotation.*;
 import org.springframework.web.multipart.MultipartFile;
 
 import java.util.List;
-import java.util.Map;
 
 /**
  * Controlador REST del módulo de Reportes Mensuales.
@@ -209,25 +208,4 @@ public class ReporteController {
         return ResponseEntity.ok(resultado);
     }
 
-    /**
-     * Maneja errores de validación de negocio (parámetros inválidos, duplicados, etc.).
-     *
-     * @param ex excepción lanzada por el servicio
-     * @return respuesta 400 con el mensaje de error
-     */
-    @ExceptionHandler(IllegalArgumentException.class)
-    public ResponseEntity<Map<String, String>> handleIllegalArgument(IllegalArgumentException ex) {
-        return ResponseEntity.badRequest().body(Map.of("error", ex.getMessage()));
-    }
-
-    /**
-     * Maneja errores de estado inválido (permisos, transiciones no permitidas, etc.).
-     *
-     * @param ex excepción lanzada por el servicio
-     * @return respuesta 409 Conflict con el mensaje de error
-     */
-    @ExceptionHandler(IllegalStateException.class)
-    public ResponseEntity<Map<String, String>> handleIllegalState(IllegalStateException ex) {
-        return ResponseEntity.status(HttpStatus.CONFLICT).body(Map.of("error", ex.getMessage()));
-    }
 }
