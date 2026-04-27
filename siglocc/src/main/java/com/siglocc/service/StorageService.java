@@ -139,6 +139,33 @@ public class StorageService {
     }
 
     /**
+     * Almacena el PDF formal de una solicitud de anticipo generado por el sistema.
+     *
+     * <p>El archivo se guarda en el subdirectorio {@code anticipos/} con el nombre
+     * {@code ANTICIPO_{id}.pdf}. Si ya existe un archivo previo (p.ej. por
+     * re-generación), se reemplaza.</p>
+     *
+     * @param pdfBytes    contenido del PDF en bytes
+     * @param solicitudId ID de la solicitud de anticipo
+     * @return ruta relativa del archivo almacenado (ej: {@code anticipos/ANTICIPO_12.pdf})
+     * @throws IllegalStateException si ocurre un error de I/O al escribir el archivo
+     */
+    public String almacenarPdfAnticipo(byte[] pdfBytes, Integer solicitudId) {
+        String nombreArchivo = "ANTICIPO_" + solicitudId + ".pdf";
+        String rutaRelativa  = "anticipos/" + nombreArchivo;
+        try {
+            Path directorio = Path.of(storagePath, "anticipos");
+            Files.createDirectories(directorio);
+            Path destino = directorio.resolve(nombreArchivo);
+            Files.write(destino, pdfBytes);
+        } catch (IOException e) {
+            throw new IllegalStateException(
+                    "No se pudo almacenar el PDF del anticipo: " + e.getMessage());
+        }
+        return rutaRelativa;
+    }
+
+    /**
      * Almacena un documento logístico (lista de transportadora o formato ABC).
      *
      * <p>Los documentos se guardan en el subdirectorio {@code docs/} dentro del

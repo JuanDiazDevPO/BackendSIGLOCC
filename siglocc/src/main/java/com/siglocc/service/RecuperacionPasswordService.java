@@ -11,6 +11,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.time.LocalDateTime;
+import java.util.Map;
 import java.util.UUID;
 
 /**
@@ -107,18 +108,13 @@ public class RecuperacionPasswordService {
             String enlace = frontendUrl + "/reset-password?token=" + tokenValor;
 
             // Enviar correo de forma asíncrona (no bloquea la respuesta HTTP)
-            emailService.enviar(
+            emailService.enviarHtml(
                     usuario.getEmail(),
                     "SIGLOCC - Restablecimiento de contraseña",
-                    String.format(
-                            "Hola %s,%n%n" +
-                            "Recibimos una solicitud para restablecer la contraseña de tu cuenta.%n%n" +
-                            "Haz clic en el siguiente enlace para crear una nueva contraseña " +
-                            "(válido por 30 minutos):%n%n%s%n%n" +
-                            "Si no solicitaste este cambio, puedes ignorar este correo. " +
-                            "Tu contraseña actual seguirá siendo la misma.%n%n" +
-                            "Saludos,%nEquipo SIGLOCC",
-                            usuario.getName(), enlace
+                    "recuperacion-password",
+                    Map.of(
+                        "nombre", usuario.getName(),
+                        "enlace", enlace
                     )
             );
         });

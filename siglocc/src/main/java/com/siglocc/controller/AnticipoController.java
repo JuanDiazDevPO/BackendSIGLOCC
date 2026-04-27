@@ -2,77 +2,74 @@ package com.siglocc.controller;
 
 import com.siglocc.dto.AnticipoRequest;
 import com.siglocc.dto.AnticipoResponse;
+import com.siglocc.repository.SolicitudAnticipoRepository;
 import com.siglocc.service.AnticipoService;
+import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.security.SecurityRequirement;
+import io.swagger.v3.oas.annotations.tags.Tag;
+import org.springframework.beans.factory.annotation.Value;
+import org.springframework.core.io.Resource;
+import org.springframework.core.io.UrlResource;
+import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpStatus;
+import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.*;
 
-import java.util.Map;
+import java.io.IOException;
+import java.nio.file.Path;
 
 /**
  * Controlador REST para el módulo de anticipos de presupuesto.
  *
- * <p>Expone dos endpoints:</p>
+ * <p>Expone tres endpoints:</p>
  * <ul>
- *   <li>{@code POST /api/v1/anticipos} – Crear una solicitud de anticipo.
- *       Accesible para cualquier usuario autenticado.</li>
- *   <li>{@code PATCH /api/v1/anticipos/{id}/aprobar} – Aprobar una solicitud pendiente.
- *       Solo accesible para el rol {@code ENL_RECURSOS}.</li>
+ *   <li>{@code POST  /api/v1/anticipos}             – Crear solicitud de anticipo.</li>
+ *   <li>{@code PATCH /api/v1/anticipos/{id}/aprobar} – Aprobar solicitud (solo ENL_RECURSOS).</li>
+ *   <li>{@code GET   /api/v1/anticipos/{id}/pdf}     – Descargar el PDF formal de la solicitud.</li>
  * </ul>
- *
- * <p>{@code @SecurityRequirement} le indica a Swagger que este controlador
- * requiere el token JWT (muestra el candado 🔒 en la documentación).</p>
  */
 @RestController
 @RequestMapping("/api/v1/anticipos")
 @SecurityRequirement(name = "bearerAuth")
+@Tag(name = "Anticipos", description = "Solicitudes de anticipo de presupuesto")
 public class AnticipoController {
 
     private final AnticipoService anticipoService;
+    private final SolicitudAnticipoRepository solicitudRepo;
 
-    public AnticipoController(AnticipoService anticipoService) {
+    @Value("${app.storage.path:uploads}")
+    private String storagePath;
+
+    public AnticipoController(AnticipoService anticipoService,
+                               SolicitudAnticipoRepository solicitudRepo) {
         this.anticipoService = anticipoService;
+        this.solicitudRepo   = solicitudRepo;
     }
 
     /**
      * Crea una nueva solicitud de anticipo.
-     *
-     * <p>El sistema valida automáticamente el saldo disponible consultando
-     * la vista {@code vista_control_saldos_enl}. El resultado puede ser:</p>
-     * <ul>
-     *   <li>HTTP 201 si el monto es válido y la solicitud queda en estado {@code PENDIENTE}.</li>
-     *   <li>HTTP 400 si el monto supera el saldo disponible y la solicitud queda {@code RECHAZADO}.</li>
-     * </ul>
-     *
-     * <p>El usuario, equipo y temporada se toman automáticamente de la sesión activa,
-     * por lo que el Front-end solo necesita enviar: título, descripción, monto y tipo.</p>
-     *
-     * @param request datos de la solicitud ingresados por el usuario
-     * @return HTTP 201 (pendiente) o HTTP 400 (rechazo automático)
+     * El sistema valida el saldo disponible automáticamente y genera el PDF formal.
      */
+    @Operation(summary = "Crear solicitud de anticipo",
+               description = "Valida saldo, guarda la solicitud y genera el PDF formal. " +
+                             "Devuelve 201 si queda PENDIENTE o 400 si es rechazada por saldo insuficiente.")
     @PostMapping
     public ResponseEntity<AnticipoResponse> crearSolicitud(@RequestBody AnticipoRequest request) {
         AnticipoResponse response = anticipoService.crearSolicitud(request);
-
-        HttpStatus status = response.estado().equals("RECHAZADO")
+        HttpStatus status = "RECHAZADO".equals(response.estado())
                 ? HttpStatus.BAD_REQUEST
                 : HttpStatus.CREATED;
-
         return ResponseEntity.status(status).body(response);
     }
 
     /**
-     * Aprueba una solicitud de anticipo en estado {@code PENDIENTE}.
-     *
-     * <p>Solo accesible para el rol {@code ENL_RECURSOS}. Al aprobarse,
-     * el monto queda registrado como ejecutado en la vista de saldos y
-     * se notifica al solicitante por correo electrónico.</p>
-     *
-     * @param id ID de la solicitud a aprobar
-     * @return HTTP 200 con confirmación de la aprobación
+     * Aprueba una solicitud de anticipo en estado PENDIENTE.
+     * Solo accesible para el rol {@code ENL_RECURSOS}.
      */
+    @Operation(summary = "Aprobar solicitud de anticipo",
+               description = "Solo ENL_RECURSOS puede aprobar. Notifica al solicitante por correo.")
     @PatchMapping("/{id}/aprobar")
     @PreAuthorize("hasRole('ENL_RECURSOS')")
     public ResponseEntity<AnticipoResponse> aprobar(@PathVariable Integer id) {
@@ -80,20 +77,27 @@ public class AnticipoController {
     }
 
     /**
-     * Maneja errores de validación: solicitud no encontrada o rol/equipo inexistente.
-     * Retorna HTTP 400 con el mensaje del error.
+     * Descarga el PDF formal de la solicitud de anticipo.
+     * El archivo se genera automáticamente al crear la solicitud.
      */
-    @ExceptionHandler(IllegalArgumentException.class)
-    public ResponseEntity<Map<String, String>> handleIllegalArgument(IllegalArgumentException ex) {
-        return ResponseEntity.badRequest().body(Map.of("error", ex.getMessage()));
-    }
-
-    /**
-     * Maneja errores de estado inválido (ej: intentar aprobar una solicitud ya aprobada).
-     * Retorna HTTP 400 con el mensaje del error.
-     */
-    @ExceptionHandler(IllegalStateException.class)
-    public ResponseEntity<Map<String, String>> handleIllegalState(IllegalStateException ex) {
-        return ResponseEntity.badRequest().body(Map.of("error", ex.getMessage()));
+    @Operation(summary = "Descargar PDF de la solicitud",
+               description = "Devuelve el PDF formal generado al crear la solicitud. " +
+                             "Retorna 404 si el PDF aún no fue generado.")
+    @GetMapping(value = "/{id}/pdf", produces = MediaType.APPLICATION_PDF_VALUE)
+    public ResponseEntity<Resource> descargarPdf(@PathVariable Integer id) throws IOException {
+        var solicitudOpt = solicitudRepo.findById(id);
+        if (solicitudOpt.isEmpty() || solicitudOpt.get().getRutaPdf() == null) {
+            return ResponseEntity.notFound().build();
+        }
+        Path archivo = Path.of(storagePath).resolve(solicitudOpt.get().getRutaPdf());
+        Resource recurso = new UrlResource(archivo.toUri());
+        if (!recurso.exists() || !recurso.isReadable()) {
+            return ResponseEntity.notFound().build();
+        }
+        return ResponseEntity.ok()
+                .header(HttpHeaders.CONTENT_DISPOSITION,
+                        "attachment; filename=\"ANTICIPO_" + id + ".pdf\"")
+                .contentType(MediaType.APPLICATION_PDF)
+                .body(recurso);
     }
 }

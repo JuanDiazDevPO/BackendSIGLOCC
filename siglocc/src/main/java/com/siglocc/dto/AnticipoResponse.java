@@ -14,9 +14,12 @@ package com.siglocc.dto;
  * @param id      ID de la solicitud guardada en BD
  * @param estado  estado resultante: {@code PENDIENTE}, {@code RECHAZADO} o {@code APROBADO}
  * @param mensaje descripción legible del resultado para mostrar al usuario
+ * @param rutaPdf ruta relativa del PDF generado (ej: {@code anticipos/ANTICIPO_12.pdf});
+ *                {@code null} si la generación falló
  */
 public record AnticipoResponse(
         Integer id,
         String estado,
-        String mensaje
+        String mensaje,
+        String rutaPdf
 ) {}
