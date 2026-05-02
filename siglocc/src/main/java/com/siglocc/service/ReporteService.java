@@ -122,46 +122,12 @@ public class ReporteService {
                     " para la temporada " + request.temporadaId() + ".");
         }
 
-        // Validar categorías y acumular totales por bucket presupuestal
-        List<ReporteDetalle> detalles          = new ArrayList<>();
-        BigDecimal totalEntrenamiento          = BigDecimal.ZERO;  // rubros E-*
-        BigDecimal totalMentoreoOtros          = BigDecimal.ZERO;  // rubros M-* y O-*
-
-        for (ReporteDetalleRequest dr : request.detalles()) {
-            ReporteCategoria categoria = categoriaRepo.findById(dr.categoriaCodigo())
-                    .orElseThrow(() -> new IllegalArgumentException(
-                            "Categoría no encontrada: '" + dr.categoriaCodigo() + "'. " +
-                            "Verifique que el código exista en la tabla reporte_categorias."));
-
-            // Los equipos ERL solo pueden reportar gastos de entrenamiento (familia E)
-            if ("ERL".equals(equipoTipo) && categoria.getFamilia() != FamiliaCategoria.E) {
-                throw new IllegalArgumentException(
-                        "El equipo ERL solo puede reportar categorías de la familia 'E'. " +
-                        "La categoría '" + dr.categoriaCodigo() + "' pertenece a la familia '" +
-                        categoria.getFamilia().name() + "'.");
-            }
-
-            if (dr.montoGastado() == null || dr.montoGastado().compareTo(BigDecimal.ZERO) < 0) {
-                throw new IllegalArgumentException(
-                        "El monto gastado para la categoría '" + dr.categoriaCodigo() +
-                        "' debe ser mayor o igual a cero.");
-            }
-
-            // Acumular por bucket según familia (E → entrenamiento; M y O → mentoreo/otros)
-            if (categoria.getFamilia() == FamiliaCategoria.E) {
-                totalEntrenamiento = totalEntrenamiento.add(dr.montoGastado());
-            } else {
-                totalMentoreoOtros = totalMentoreoOtros.add(dr.montoGastado());
-            }
-
-            ReporteDetalle detalle = new ReporteDetalle();
-            detalle.setCategoriaCodigo(dr.categoriaCodigo());
-            detalle.setMontoGastado(dr.montoGastado());
-            detalles.add(detalle);
-        }
+        // Validar categorías, restricciones por rol y acumular totales por bucket
+        DetallesValidados validados = validarYConstruirDetalles(request.detalles(), equipoTipo);
 
         // Validación de techo: comparar totales contra saldo disponible en la vista
-        validarTechoPresupuestal(equipoId, request.temporadaId(), totalEntrenamiento, totalMentoreoOtros);
+        validarTechoPresupuestal(equipoId, request.temporadaId(),
+                validados.totalEntrenamiento(), validados.totalMentoreoOtros());
 
         // Persistir el cabezote
         ReporteMensual reporte = new ReporteMensual();
@@ -174,12 +140,12 @@ public class ReporteService {
         reporteRepo.save(reporte);
 
         // Persistir cada detalle dentro de la misma transacción
-        for (ReporteDetalle detalle : detalles) {
+        for (ReporteDetalle detalle : validados.detalles()) {
             detalle.setReporteId(reporte.getId());
             detalleRepo.save(detalle);
         }
 
-        return construirResponse(reporte, detalles);
+        return construirResponse(reporte, validados.detalles());
     }
 
     // ─────────────────────────────────────────────────────────────────────────
@@ -230,6 +196,96 @@ public class ReporteService {
 
         List<ReporteDetalle> detalles = detalleRepo.findByReporteId(id);
         return construirResponse(reporte, detalles);
+    }
+
+    // ─────────────────────────────────────────────────────────────────────────
+    // EDITAR REPORTE RECHAZADO
+    // ─────────────────────────────────────────────────────────────────────────
+
+    /**
+     * Corrige los rubros de un reporte rechazado y lo devuelve a estado
+     * {@link EstadoReporte#BORRADOR} para que el ERL pueda adjuntar un nuevo
+     * soporte y reiniciar el flujo de aprobación.
+     *
+     * <p><strong>Solo opera sobre reportes en estado {@link EstadoReporte#RECHAZADO}.</strong>
+     * Intentar editar un reporte en cualquier otro estado lanza
+     * {@link IllegalStateException}.</p>
+     *
+     * <p><strong>Qué se modifica:</strong></p>
+     * <ul>
+     *   <li>Los detalles anteriores se eliminan y se reemplazan por los nuevos.</li>
+     *   <li>{@code urlSoporte} se borra — el soporte anterior ya no refleja los
+     *       montos corregidos; el ERL debe subir uno nuevo.</li>
+     *   <li>{@code estado} vuelve a {@link EstadoReporte#BORRADOR}.</li>
+     *   <li>{@code aprobadorErleId} y {@code aprobadorEnlId} se limpian.</li>
+     *   <li>{@code fechaAprobacionFinal} se limpia.</li>
+     * </ul>
+     *
+     * <p><strong>Qué se conserva:</strong></p>
+     * <ul>
+     *   <li>{@code observaciones} del rechazo — el ERL puede ver el motivo
+     *       mientras corrige los datos.</li>
+     *   <li>El período ({@code mes}, {@code anio}, {@code temporadaId}) y el
+     *       {@code equipoId} no cambian.</li>
+     * </ul>
+     *
+     * @param id      ID del reporte a corregir
+     * @param request nueva lista de rubros con montos corregidos
+     * @return respuesta actualizada con el reporte en estado BORRADOR
+     * @throws IllegalArgumentException si el reporte no existe, alguna categoría
+     *                                  no existe, un ERL usa familia no permitida
+     *                                  o los montos superan el saldo disponible
+     * @throws IllegalStateException    si el usuario no es dueño del reporte o
+     *                                  el reporte no está en estado RECHAZADO
+     */
+    @Transactional
+    public ReporteResponse editarReporte(Integer id, EditarReporteRequest request) {
+        JwtAuthDetails details = obtenerDetails();
+        Integer equipoId  = details.equipoId();
+        String equipoTipo = details.equipoTipo();
+
+        ReporteMensual reporte = reporteRepo.findById(id)
+                .orElseThrow(() -> new IllegalArgumentException(
+                        "Reporte no encontrado con id: " + id));
+
+        // Control de acceso: solo el equipo dueño puede corregir su reporte
+        if (!reporte.getEquipoId().equals(equipoId)) {
+            throw new IllegalStateException(
+                    "No tiene permisos para editar el reporte " + id +
+                    ". Solo el equipo propietario puede corregirlo.");
+        }
+
+        // Solo se pueden editar reportes rechazados
+        if (reporte.getEstado() != EstadoReporte.RECHAZADO) {
+            throw new IllegalStateException(
+                    "Solo se pueden editar reportes en estado RECHAZADO. " +
+                    "Estado actual: " + reporte.getEstado().name());
+        }
+
+        // Validar categorías, restricciones por rol y acumular totales por bucket
+        DetallesValidados validados = validarYConstruirDetalles(request.detalles(), equipoTipo);
+
+        // Validar techo presupuestal con los montos corregidos
+        validarTechoPresupuestal(equipoId, reporte.getTemporadaId(),
+                validados.totalEntrenamiento(), validados.totalMentoreoOtros());
+
+        // Reemplazar detalles: eliminar los anteriores y guardar los nuevos
+        detalleRepo.deleteByReporteId(id);
+        for (ReporteDetalle detalle : validados.detalles()) {
+            detalle.setReporteId(id);
+            detalleRepo.save(detalle);
+        }
+
+        // Resetear el cabezote a BORRADOR
+        reporte.setEstado(EstadoReporte.BORRADOR);
+        reporte.setUrlSoporte(null);              // El soporte anterior ya no es válido
+        reporte.setAprobadorErleId(null);         // Limpiar auditoría del ciclo anterior
+        reporte.setAprobadorEnlId(null);
+        reporte.setFechaAprobacionFinal(null);
+        // Las observaciones se conservan para que el ERL sepa qué corregir
+        reporteRepo.save(reporte);
+
+        return construirResponse(reporte, validados.detalles());
     }
 
     // ─────────────────────────────────────────────────────────────────────────
@@ -349,6 +405,75 @@ public class ReporteService {
     // ─────────────────────────────────────────────────────────────────────────
     // MÉTODOS PRIVADOS
     // ─────────────────────────────────────────────────────────────────────────
+
+    /**
+     * Contenedor inmutable con los detalles ya validados y los totales acumulados
+     * por bucket presupuestal. Se usa para evitar duplicar la lógica de validación
+     * entre {@link #crearReporte} y {@link #editarReporte}.
+     */
+    private record DetallesValidados(
+            List<ReporteDetalle> detalles,
+            BigDecimal totalEntrenamiento,
+            BigDecimal totalMentoreoOtros) {}
+
+    /**
+     * Valida cada rubro del request y construye la lista de entidades {@link ReporteDetalle},
+     * acumulando los totales por bucket presupuestal.
+     *
+     * <p>Reglas aplicadas por cada rubro:</p>
+     * <ul>
+     *   <li>La categoría debe existir en {@code reporte_categorias}.</li>
+     *   <li>Los equipos ERL solo pueden usar categorías de familia {@code E}.</li>
+     *   <li>El monto debe ser 0 o mayor (no nulo, no negativo).</li>
+     * </ul>
+     *
+     * @param requests  lista de rubros del request (create o edit)
+     * @param equipoTipo tipo de equipo del usuario autenticado (ERL, ERLE, ENL)
+     * @return record con la lista de detalles y los totales E / M+O
+     * @throws IllegalArgumentException si alguna categoría no existe, el rol no tiene acceso
+     *                                  a esa familia, o el monto es negativo/nulo
+     */
+    private DetallesValidados validarYConstruirDetalles(List<ReporteDetalleRequest> requests,
+                                                        String equipoTipo) {
+        List<ReporteDetalle> detalles      = new ArrayList<>();
+        BigDecimal totalEntrenamiento      = BigDecimal.ZERO;
+        BigDecimal totalMentoreoOtros      = BigDecimal.ZERO;
+
+        for (ReporteDetalleRequest dr : requests) {
+            ReporteCategoria categoria = categoriaRepo.findById(dr.categoriaCodigo())
+                    .orElseThrow(() -> new IllegalArgumentException(
+                            "Categoría no encontrada: '" + dr.categoriaCodigo() + "'. " +
+                            "Verifique que el código exista en la tabla reporte_categorias."));
+
+            // Los equipos ERL solo pueden reportar gastos de entrenamiento (familia E)
+            if ("ERL".equals(equipoTipo) && categoria.getFamilia() != FamiliaCategoria.E) {
+                throw new IllegalArgumentException(
+                        "El equipo ERL solo puede reportar categorías de la familia 'E'. " +
+                        "La categoría '" + dr.categoriaCodigo() + "' pertenece a la familia '" +
+                        categoria.getFamilia().name() + "'.");
+            }
+
+            if (dr.montoGastado() == null || dr.montoGastado().compareTo(BigDecimal.ZERO) < 0) {
+                throw new IllegalArgumentException(
+                        "El monto gastado para la categoría '" + dr.categoriaCodigo() +
+                        "' debe ser mayor o igual a cero.");
+            }
+
+            // Acumular por bucket: E → entrenamiento; M y O → mentoreo/otros
+            if (categoria.getFamilia() == FamiliaCategoria.E) {
+                totalEntrenamiento = totalEntrenamiento.add(dr.montoGastado());
+            } else {
+                totalMentoreoOtros = totalMentoreoOtros.add(dr.montoGastado());
+            }
+
+            ReporteDetalle detalle = new ReporteDetalle();
+            detalle.setCategoriaCodigo(dr.categoriaCodigo());
+            detalle.setMontoGastado(dr.montoGastado());
+            detalles.add(detalle);
+        }
+
+        return new DetallesValidados(detalles, totalEntrenamiento, totalMentoreoOtros);
+    }
 
     /**
      * Verifica que los montos reportados no superen el saldo disponible en la vista

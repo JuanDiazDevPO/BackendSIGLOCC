@@ -82,4 +82,130 @@ public class StorageService {
 
         return nombreArchivo;
     }
+
+    /**
+     * Almacena una foto de evidencia logística con la convención de nombre establecida.
+     *
+     * <p>La foto se guarda en un subdirectorio según el contexto:</p>
+     * <ul>
+     *   <li>{@code contenedor/} – fotos de llegada de contenedores.</li>
+     *   <li>{@code entrega/}    – fotos de entrega a iglesias.</li>
+     *   <li>{@code ninos/}      – fotos de entrega a niños.</li>
+     * </ul>
+     *
+     * <p>Nombre resultante: {@code {contexto}/FOTO_{contexto}_{referenciaId}_{orden}.ext}</p>
+     *
+     * @param foto        archivo de imagen multipart (JPG, PNG, JPEG)
+     * @param contexto    subdirectorio lógico («contenedor», «entrega», «ninos»)
+     * @param referenciaId ID del registro al que pertenece la foto
+     * @param orden       posición de la foto en el conjunto (1, 2, 3…)
+     * @return nombre final del archivo almacenado (incluyendo subdirectorio)
+     * @throws IllegalArgumentException si la extensión no es de imagen
+     * @throws IllegalStateException    si ocurre un error de I/O
+     */
+    public String almacenarFotoLogistica(MultipartFile foto, String contexto,
+                                         Integer referenciaId, Integer orden) {
+        String nombreOriginal = foto.getOriginalFilename();
+        if (nombreOriginal == null || !nombreOriginal.contains(".")) {
+            throw new IllegalArgumentException("El archivo debe tener una extensión válida.");
+        }
+
+        String extension = nombreOriginal.substring(nombreOriginal.lastIndexOf(".")).toLowerCase();
+        // El contexto "firma" también acepta PDF (para actas escaneadas)
+        Set<String> extensionesPermitidas = "firma".equals(contexto)
+                ? Set.of(".jpg", ".jpeg", ".png", ".pdf")
+                : Set.of(".jpg", ".jpeg", ".png");
+        if (!extensionesPermitidas.contains(extension)) {
+            throw new IllegalArgumentException(
+                    "Extensión no permitida. Solo se aceptan imágenes JPG o PNG" +
+                    ("firma".equals(contexto) ? " o PDF para firmas escaneadas." : "."));
+        }
+
+        String nombreArchivo = "FOTO_" + contexto.toUpperCase() + "_"
+                + referenciaId + "_" + orden + extension;
+        String rutaRelativa  = contexto + "/" + nombreArchivo;
+
+        try {
+            Path directorio = Path.of(storagePath, contexto);
+            Files.createDirectories(directorio);
+            Path destino = directorio.resolve(nombreArchivo);
+            Files.copy(foto.getInputStream(), destino, StandardCopyOption.REPLACE_EXISTING);
+        } catch (IOException e) {
+            throw new IllegalStateException(
+                    "No se pudo almacenar la foto: " + e.getMessage());
+        }
+
+        return rutaRelativa;
+    }
+
+    /**
+     * Almacena el PDF formal de una solicitud de anticipo generado por el sistema.
+     *
+     * <p>El archivo se guarda en el subdirectorio {@code anticipos/} con el nombre
+     * {@code ANTICIPO_{id}.pdf}. Si ya existe un archivo previo (p.ej. por
+     * re-generación), se reemplaza.</p>
+     *
+     * @param pdfBytes    contenido del PDF en bytes
+     * @param solicitudId ID de la solicitud de anticipo
+     * @return ruta relativa del archivo almacenado (ej: {@code anticipos/ANTICIPO_12.pdf})
+     * @throws IllegalStateException si ocurre un error de I/O al escribir el archivo
+     */
+    public String almacenarPdfAnticipo(byte[] pdfBytes, Integer solicitudId) {
+        String nombreArchivo = "ANTICIPO_" + solicitudId + ".pdf";
+        String rutaRelativa  = "anticipos/" + nombreArchivo;
+        try {
+            Path directorio = Path.of(storagePath, "anticipos");
+            Files.createDirectories(directorio);
+            Path destino = directorio.resolve(nombreArchivo);
+            Files.write(destino, pdfBytes);
+        } catch (IOException e) {
+            throw new IllegalStateException(
+                    "No se pudo almacenar el PDF del anticipo: " + e.getMessage());
+        }
+        return rutaRelativa;
+    }
+
+    /**
+     * Almacena un documento logístico (lista de transportadora o formato ABC).
+     *
+     * <p>Los documentos se guardan en el subdirectorio {@code docs/} dentro del
+     * directorio de almacenamiento configurado.</p>
+     *
+     * <p>Nombre resultante: {@code docs/DOC_{tipo}_{recepcionId}.ext}</p>
+     *
+     * @param documento   archivo PDF multipart
+     * @param tipo        tipo de documento: «TRANSPORTADORA» o «ABC»
+     * @param recepcionId ID de la recepción de contenedor
+     * @return nombre final del archivo almacenado (incluyendo subdirectorio)
+     * @throws IllegalArgumentException si el archivo no es PDF
+     * @throws IllegalStateException    si ocurre un error de I/O
+     */
+    public String almacenarDocumentoLogistica(MultipartFile documento, String tipo,
+                                               Integer recepcionId) {
+        String nombreOriginal = documento.getOriginalFilename();
+        if (nombreOriginal == null || !nombreOriginal.contains(".")) {
+            throw new IllegalArgumentException("El archivo debe tener una extensión válida.");
+        }
+
+        String extension = nombreOriginal.substring(nombreOriginal.lastIndexOf(".")).toLowerCase();
+        if (!".pdf".equals(extension)) {
+            throw new IllegalArgumentException(
+                    "Extensión no permitida. Los documentos deben ser PDF.");
+        }
+
+        String nombreArchivo = "DOC_" + tipo.toUpperCase() + "_" + recepcionId + extension;
+        String rutaRelativa  = "docs/" + nombreArchivo;
+
+        try {
+            Path directorio = Path.of(storagePath, "docs");
+            Files.createDirectories(directorio);
+            Path destino = directorio.resolve(nombreArchivo);
+            Files.copy(documento.getInputStream(), destino, StandardCopyOption.REPLACE_EXISTING);
+        } catch (IOException e) {
+            throw new IllegalStateException(
+                    "No se pudo almacenar el documento: " + e.getMessage());
+        }
+
+        return rutaRelativa;
+    }
 }

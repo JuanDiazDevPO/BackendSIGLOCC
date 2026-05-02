@@ -7,6 +7,8 @@ import com.siglocc.repository.SolicitudAnticipoRepository;
 import com.siglocc.repository.TemporadaRepository;
 import com.siglocc.repository.UsuarioRepository;
 import com.siglocc.repository.VistaControlSaldosRepository;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -15,13 +17,15 @@ import org.springframework.transaction.support.TransactionSynchronizationManager
 
 import java.math.BigDecimal;
 import java.time.LocalDateTime;
+import java.util.Map;
 
 /**
  * Servicio que contiene la lógica de negocio del módulo de anticipos.
  *
  * <p>Implementa dos operaciones principales:</p>
  * <ul>
- *   <li>{@link #crearSolicitud} – valida saldo, persiste la solicitud y notifica por correo</li>
+ *   <li>{@link #crearSolicitud} – valida saldo, persiste la solicitud,
+ *       genera el PDF formal y notifica por correo</li>
  *   <li>{@link #aprobarSolicitud} – cambia el estado a APROBADO y notifica al solicitante</li>
  * </ul>
  *
@@ -35,22 +39,30 @@ import java.time.LocalDateTime;
 @Service
 public class AnticipoService {
 
+    private static final Logger log = LoggerFactory.getLogger(AnticipoService.class);
+
     private final SolicitudAnticipoRepository solicitudRepo;
     private final VistaControlSaldosRepository saldosRepo;
     private final UsuarioRepository usuarioRepository;
     private final TemporadaRepository temporadaRepository;
     private final EmailService emailService;
+    private final AnticipoDocumentoService documentoService;
+    private final StorageService storageService;
 
     public AnticipoService(SolicitudAnticipoRepository solicitudRepo,
                            VistaControlSaldosRepository saldosRepo,
                            UsuarioRepository usuarioRepository,
                            TemporadaRepository temporadaRepository,
-                           EmailService emailService) {
-        this.solicitudRepo = solicitudRepo;
-        this.saldosRepo = saldosRepo;
+                           EmailService emailService,
+                           AnticipoDocumentoService documentoService,
+                           StorageService storageService) {
+        this.solicitudRepo    = solicitudRepo;
+        this.saldosRepo       = saldosRepo;
         this.usuarioRepository = usuarioRepository;
         this.temporadaRepository = temporadaRepository;
-        this.emailService = emailService;
+        this.emailService     = emailService;
+        this.documentoService = documentoService;
+        this.storageService   = storageService;
     }
 
     /**
@@ -58,53 +70,52 @@ public class AnticipoService {
      *
      * <p><strong>Flujo completo:</strong></p>
      * <ol>
-     *   <li>Extrae el usuario autenticado del token JWT (vía {@link SecurityContextHolder}).</li>
-     *   <li>Obtiene la temporada activa desde BD ({@code es_actual = true}).</li>
-     *   <li>Consulta la vista {@code vista_control_saldos_enl} para obtener el saldo
-     *       disponible del equipo del usuario en la temporada activa.</li>
-     *   <li>Compara el monto solicitado contra el saldo del rubro correspondiente:
-     *       <ul>
-     *         <li>Si <strong>excede</strong>: guarda como {@code RECHAZADO} y notifica al solicitante.</li>
-     *         <li>Si <strong>cabe</strong>: guarda como {@code PENDIENTE} y notifica al solicitante
-     *             y al coordinador ({@code ENL_RECURSOS}).</li>
-     *       </ul>
-     *   </li>
-     *   <li>Los correos se envían después del commit de la transacción.</li>
+     *   <li>Extrae el usuario autenticado del token JWT.</li>
+     *   <li>Obtiene la temporada activa desde BD.</li>
+     *   <li>Consulta la vista de control de saldos.</li>
+     *   <li>Si el monto excede el saldo: guarda como RECHAZADO y notifica.</li>
+     *   <li>Si el monto cabe: guarda como PENDIENTE y notifica a solicitante y aprobador.</li>
+     *   <li>En ambos casos genera el PDF formal y lo almacena en disco.</li>
      * </ol>
      *
-     * @param request datos de la solicitud (título, descripción, monto, tipo de presupuesto)
-     * @return DTO con el ID, estado y mensaje descriptivo del resultado
-     * @throws IllegalStateException    si no hay usuario autenticado o no hay temporada activa
-     * @throws IllegalArgumentException si no hay presupuesto configurado para el equipo y temporada
+     * @param request datos del formulario de solicitud
+     * @return DTO con ID, estado, mensaje y ruta del PDF generado
      */
     @Transactional
     public AnticipoResponse crearSolicitud(AnticipoRequest request) {
-        // Paso 1: identificar quién está creando la solicitud desde la sesión activa
+        // Paso 1: identificar quién está creando la solicitud
         String emailAutenticado = SecurityContextHolder.getContext().getAuthentication().getName();
         Usuario solicitante = usuarioRepository.findByEmail(emailAutenticado)
                 .orElseThrow(() -> new IllegalStateException("Usuario autenticado no encontrado."));
 
-        // Paso 2: obtener la temporada activa automáticamente (sin que el front la envíe)
+        // Paso 2: obtener la temporada activa
         Temporada temporada = temporadaRepository.findByEsActualTrue()
                 .orElseThrow(() -> new IllegalStateException("No hay una temporada activa configurada."));
 
-        // Paso 3: consultar saldo disponible en la vista de control
+        // Paso 3: consultar saldo disponible
         VistaControlSaldos saldos = saldosRepo.findById(
                 new VistaControlSaldosId(solicitante.getEquipo().getId(), temporada.getId())
         ).orElseThrow(() -> new IllegalArgumentException(
                 "No se encontró presupuesto para el equipo y temporada activa."));
 
-        // Paso 4: seleccionar el saldo según el rubro solicitado
+        // Paso 4: seleccionar el saldo según el rubro
         BigDecimal saldoDisponible = request.tipoPresupuesto() == TipoPresupuesto.ENTRENAMIENTO
                 ? saldos.getSaldoEntrenamiento()
                 : saldos.getSaldoMentoreo();
 
-        // Construir la entidad con los datos de la sesión
+        // Construir la entidad con todos los campos
         SolicitudAnticipo solicitud = new SolicitudAnticipo();
         solicitud.setTitulo(request.titulo());
         solicitud.setDescripcion(request.descripcion());
         solicitud.setMontoSolicitado(request.montoSolicitado());
         solicitud.setTipoPresupuesto(request.tipoPresupuesto());
+        solicitud.setCiudad(request.ciudad());
+        solicitud.setCedula(request.cedula());
+        solicitud.setBanco(request.banco());
+        solicitud.setTipoCuenta(request.tipoCuenta());
+        solicitud.setNumeroCuenta(request.numeroCuenta());
+        solicitud.setNombreTitular(request.nombreTitular());
+        solicitud.setCedulaTitular(request.cedulaTitular());
         solicitud.setEquipoId(solicitante.getEquipo().getId());
         solicitud.setTemporadaId(temporada.getId());
         solicitud.setUsuarioId(solicitante.getId());
@@ -115,67 +126,80 @@ public class AnticipoService {
             solicitud.setMotivoRechazo("Sistema: Monto excede el saldo disponible");
             solicitudRepo.save(solicitud);
 
+            String rutaPdf = generarYAlmacenarPdf(solicitud, solicitante);
+
             String mensaje = String.format(
                     "Rechazo automático: El monto solicitado supera el saldo disponible ($%,.0f) en la bolsa de %s.",
                     saldoDisponible, request.tipoPresupuesto().name());
 
-            // Capturar variables para el hilo asíncrono (las lambdas requieren variables efectivamente finales)
             String emailSolicitante = solicitante.getEmail();
             String nombreSolicitante = solicitante.getName();
             String tituloSolicitud = request.titulo();
 
-            // Correo al solicitante: se envía después del commit de la transacción
             TransactionSynchronizationManager.registerSynchronization(new TransactionSynchronization() {
                 @Override
                 public void afterCommit() {
-                    emailService.enviar(
+                    emailService.enviarHtml(
                             emailSolicitante,
                             "SIGLOCC - Solicitud rechazada: " + tituloSolicitud,
-                            String.format("Hola %s,%n%nTu solicitud '%s' ha sido rechazada automáticamente.%n%nMotivo: %s%n%nSaludos,%nSIGLOCC",
-                                    nombreSolicitante, tituloSolicitud, mensaje)
+                            "solicitud-rechazada",
+                            Map.of(
+                                "nombreSolicitante", nombreSolicitante,
+                                "tituloSolicitud", tituloSolicitud,
+                                "motivo", mensaje
+                            )
                     );
                 }
             });
 
-            return new AnticipoResponse(solicitud.getId(), EstadoSolicitud.RECHAZADO.name(), mensaje);
+            return new AnticipoResponse(solicitud.getId(), EstadoSolicitud.RECHAZADO.name(),
+                    mensaje, rutaPdf);
         }
 
         // Paso 5B: saldo suficiente → guardar como PENDIENTE
         solicitud.setEstado(EstadoSolicitud.PENDIENTE);
         solicitudRepo.save(solicitud);
 
-        // Capturar todos los datos necesarios antes de que la transacción cierre el contexto JPA
-        String emailSolicitante = solicitante.getEmail();
+        String rutaPdf = generarYAlmacenarPdf(solicitud, solicitante);
+
+        String emailSolicitante  = solicitante.getEmail();
         String nombreSolicitante = solicitante.getName();
         String apellidoSolicitante = solicitante.getLastname();
-        String tituloSolicitud = request.titulo();
-        BigDecimal monto = request.montoSolicitado();
-        String tipo = request.tipoPresupuesto().name();
-        String emailAprobador = usuarioRepository.findFirstByRol_Name("ENL_RECURSOS")
+        String tituloSolicitud   = request.titulo();
+        BigDecimal monto         = request.montoSolicitado();
+        String tipo              = request.tipoPresupuesto().name();
+        String emailAprobador    = usuarioRepository.findFirstByRol_Name("ENL_RECURSOS")
                 .map(Usuario::getEmail).orElse(null);
-        String nombreAprobador = usuarioRepository.findFirstByRol_Name("ENL_RECURSOS")
+        String nombreAprobador   = usuarioRepository.findFirstByRol_Name("ENL_RECURSOS")
                 .map(Usuario::getName).orElse(null);
 
-        // Correos al solicitante y al aprobador: se envían DESPUÉS del commit exitoso
         TransactionSynchronizationManager.registerSynchronization(new TransactionSynchronization() {
             @Override
             public void afterCommit() {
-                // Notificar al solicitante que su solicitud fue recibida
-                emailService.enviar(
+                emailService.enviarHtml(
                         emailSolicitante,
                         "SIGLOCC - Solicitud recibida: " + tituloSolicitud,
-                        String.format("Hola %s,%n%nTu solicitud '%s' por $%,.0f ha sido recibida y está pendiente de aprobación.%n%nSaludos,%nSIGLOCC",
-                                nombreSolicitante, tituloSolicitud, monto)
+                        "solicitud-recibida",
+                        Map.of(
+                            "nombreSolicitante", nombreSolicitante,
+                            "tituloSolicitud", tituloSolicitud,
+                            "monto", monto
+                        )
                 );
 
-                // Notificar al coordinador ENL_RECURSOS para que gestione la aprobación
                 if (emailAprobador != null) {
-                    emailService.enviar(
+                    emailService.enviarHtml(
                             emailAprobador,
                             "SIGLOCC - Nueva solicitud pendiente: " + tituloSolicitud,
-                            String.format("Hola %s,%n%nHay una nueva solicitud de anticipo pendiente de tu aprobación.%n%nSolicitante: %s %s%nTítulo: %s%nMonto: $%,.0f%nTipo: %s%n%nIngresa al sistema para aprobar o rechazar.%n%nSaludos,%nSIGLOCC",
-                                    nombreAprobador, nombreSolicitante, apellidoSolicitante,
-                                    tituloSolicitud, monto, tipo)
+                            "nueva-solicitud-aprobador",
+                            Map.of(
+                                "nombreAprobador", nombreAprobador,
+                                "nombreSolicitante", nombreSolicitante,
+                                "apellidoSolicitante", apellidoSolicitante,
+                                "tituloSolicitud", tituloSolicitud,
+                                "monto", monto,
+                                "tipo", tipo
+                            )
                     );
                 }
             }
@@ -184,26 +208,16 @@ public class AnticipoService {
         return new AnticipoResponse(
                 solicitud.getId(),
                 EstadoSolicitud.PENDIENTE.name(),
-                "Solicitud enviada correctamente y en espera de aprobación del ENL."
+                "Solicitud enviada correctamente y en espera de aprobación del ENL.",
+                rutaPdf
         );
     }
 
     /**
      * Aprueba una solicitud de anticipo que esté en estado {@code PENDIENTE}.
      *
-     * <p>Solo el rol {@code ENL_RECURSOS} puede invocar este método (restricción
-     * aplicada en {@link com.siglocc.controller.AnticipoController} con
-     * {@code @PreAuthorize}).</p>
-     *
-     * <p>Al cambiar el estado a {@code APROBADO}, la vista
-     * {@code vista_control_saldos_enl} actualizará automáticamente el monto
-     * ejecutado en la próxima consulta, ya que la vista suma los anticipos
-     * aprobados en tiempo real.</p>
-     *
      * @param id ID de la solicitud a aprobar
      * @return DTO con el estado actualizado y mensaje de confirmación
-     * @throws IllegalArgumentException si no existe una solicitud con ese ID
-     * @throws IllegalStateException    si la solicitud no está en estado {@code PENDIENTE}
      */
     @Transactional
     public AnticipoResponse aprobarSolicitud(Integer id) {
@@ -218,27 +232,69 @@ public class AnticipoService {
         solicitud.setFechaAprobacionFinal(LocalDateTime.now());
         solicitudRepo.save(solicitud);
 
-        // Capturar datos antes de que la transacción libere el contexto JPA
-        String tituloSolicitud = solicitud.getTitulo();
-        BigDecimal monto = solicitud.getMontoSolicitado();
+        String tituloSolicitud  = solicitud.getTitulo();
+        BigDecimal monto        = solicitud.getMontoSolicitado();
         LocalDateTime fechaAprobacion = solicitud.getFechaAprobacionFinal();
-        Integer usuarioId = solicitud.getUsuarioId();
+        Integer usuarioId       = solicitud.getUsuarioId();
 
-        // Correo al solicitante: se envía después del commit exitoso
         TransactionSynchronizationManager.registerSynchronization(new TransactionSynchronization() {
             @Override
             public void afterCommit() {
                 usuarioRepository.findById(usuarioId).ifPresent(solicitante ->
-                        emailService.enviar(
+                        emailService.enviarHtml(
                                 solicitante.getEmail(),
                                 "SIGLOCC - Solicitud aprobada: " + tituloSolicitud,
-                                String.format("Hola %s,%n%nTu solicitud '%s' por $%,.0f ha sido aprobada.%n%nFecha de aprobación: %s%n%nSaludos,%nSIGLOCC",
-                                        solicitante.getName(), tituloSolicitud, monto, fechaAprobacion)
+                                "solicitud-aprobada",
+                                Map.of(
+                                    "nombreSolicitante", solicitante.getName(),
+                                    "tituloSolicitud", tituloSolicitud,
+                                    "monto", monto,
+                                    "fechaAprobacion", fechaAprobacion
+                                )
                         )
                 );
             }
         });
 
-        return new AnticipoResponse(solicitud.getId(), EstadoSolicitud.APROBADO.name(), "Solicitud aprobada exitosamente.");
+        return new AnticipoResponse(solicitud.getId(), EstadoSolicitud.APROBADO.name(),
+                "Solicitud aprobada exitosamente.", solicitud.getRutaPdf());
+    }
+
+    // ── Privados ──────────────────────────────────────────────────────────
+
+    /**
+     * Genera el PDF del anticipo, lo almacena en disco y actualiza la entidad con la ruta.
+     *
+     * @return ruta relativa del PDF, o {@code null} si la generación falló
+     */
+    private String generarYAlmacenarPdf(SolicitudAnticipo solicitud, Usuario solicitante) {
+        try {
+            String cargo = mapearCargo(solicitante.getRol().getName());
+            byte[] pdfBytes = documentoService.generarPdf(
+                    solicitud,
+                    solicitante.getName(),
+                    solicitante.getLastname(),
+                    cargo,
+                    solicitante.getEquipo().getNombre()
+            );
+            String ruta = storageService.almacenarPdfAnticipo(pdfBytes, solicitud.getId());
+            solicitud.setRutaPdf(ruta);
+            solicitudRepo.save(solicitud);
+            return ruta;
+        } catch (Exception e) {
+            log.error("No se pudo generar el PDF del anticipo {}: {}", solicitud.getId(), e.getMessage());
+            return null;
+        }
+    }
+
+    private String mapearCargo(String rolNombre) {
+        if (rolNombre == null) return "Coordinador";
+        return switch (rolNombre) {
+            case "ENL"          -> "Coordinador Nacional de Liderazgo";
+            case "ENL_RECURSOS" -> "Coordinador Nacional de Finanzas";
+            case "ERLE"         -> "Coordinador Regional de Liderazgo";
+            case "ERL"          -> "Coordinador Local de Recursos";
+            default             -> rolNombre;
+        };
     }
 }
