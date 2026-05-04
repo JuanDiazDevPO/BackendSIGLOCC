@@ -28,20 +28,27 @@ import java.util.List;
 /**
  * Configuración central de Spring Security para la aplicación SIGLOCC.
  *
- * <p>Define tres aspectos clave de la seguridad:</p>
+ * <p>
+ * Define tres aspectos clave de la seguridad:
+ * </p>
  * <ol>
- *   <li><strong>Autenticación sin estado (stateless):</strong> No se usan sesiones HTTP.
- *       Cada request debe incluir un token JWT válido en el header
- *       {@code Authorization: Bearer <token>}.</li>
- *   <li><strong>Reglas de acceso por URL:</strong> El endpoint de login y los de
- *       Swagger son públicos. Todo lo demás requiere autenticación.</li>
- *   <li><strong>Seguridad a nivel de método:</strong> {@code @EnableMethodSecurity}
- *       activa el soporte de {@code @PreAuthorize} en los controladores, permitiendo
- *       restringir endpoints a roles específicos (ej: solo {@code ENL_RECURSOS} puede
- *       aprobar anticipos).</li>
+ * <li><strong>Autenticación sin estado (stateless):</strong> No se usan
+ * sesiones HTTP.
+ * Cada request debe incluir un token JWT válido en el header
+ * {@code Authorization: Bearer <token>}.</li>
+ * <li><strong>Reglas de acceso por URL:</strong> El endpoint de login y los de
+ * Swagger son públicos. Todo lo demás requiere autenticación.</li>
+ * <li><strong>Seguridad a nivel de método:</strong>
+ * {@code @EnableMethodSecurity}
+ * activa el soporte de {@code @PreAuthorize} en los controladores, permitiendo
+ * restringir endpoints a roles específicos (ej: solo {@code ENL_RECURSOS} puede
+ * aprobar anticipos).</li>
  * </ol>
  *
- * <p>El flujo de autenticación es:</p>
+ * <p>
+ * El flujo de autenticación es:
+ * </p>
+ * 
  * <pre>
  *   Request HTTP
  *       │
@@ -72,43 +79,48 @@ public class SecurityConfig {
     /**
      * Define la cadena de filtros de seguridad HTTP.
      *
-     * <p>Configuraciones aplicadas:</p>
+     * <p>
+     * Configuraciones aplicadas:
+     * </p>
      * <ul>
-     *   <li>CSRF deshabilitado: no aplica para APIs REST sin estado.</li>
-     *   <li>Login por formulario deshabilitado: el login se maneja con JWT.</li>
-     *   <li>HTTP Basic deshabilitado: se usa solo JWT.</li>
-     *   <li>Sesiones en modo {@code STATELESS}: Spring no crea ni usa sesiones HTTP.</li>
-     *   <li>Respuesta 401 (no autorizado) cuando se intenta acceder sin credenciales
-     *       válidas, en lugar del 403 por defecto de Spring Security.</li>
+     * <li>CSRF deshabilitado: no aplica para APIs REST sin estado.</li>
+     * <li>Login por formulario deshabilitado: el login se maneja con JWT.</li>
+     * <li>HTTP Basic deshabilitado: se usa solo JWT.</li>
+     * <li>Sesiones en modo {@code STATELESS}: Spring no crea ni usa sesiones
+     * HTTP.</li>
+     * <li>Respuesta 401 (no autorizado) cuando se intenta acceder sin credenciales
+     * válidas, en lugar del 403 por defecto de Spring Security.</li>
      * </ul>
      */
     @Bean
     public SecurityFilterChain filterChain(HttpSecurity http) throws Exception {
         http
-            .cors(cors -> cors.configurationSource(corsConfigurationSource()))
-            .csrf(AbstractHttpConfigurer::disable)
-            .formLogin(AbstractHttpConfigurer::disable)
-            .httpBasic(AbstractHttpConfigurer::disable)
-            .sessionManagement(session -> session.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
-            .authorizeHttpRequests(auth -> auth
-                .requestMatchers(HttpMethod.POST, "/api/auth/login").permitAll()                  // Login público
-                .requestMatchers(HttpMethod.POST, "/api/auth/recuperar-password").permitAll()     // Solicitud de recuperación
-                .requestMatchers(HttpMethod.POST, "/api/auth/restablecer-password").permitAll()   // Confirmación con token
-                .requestMatchers(HttpMethod.OPTIONS, "/**").permitAll()                            // Preflight CORS
-                .requestMatchers(
-                    "/swagger-ui/**",
-                    "/swagger-ui.html",
-                    "/v3/api-docs/**"
-                ).permitAll()                                                                      // Documentación pública
-                .anyRequest().authenticated()                                                      // Todo lo demás requiere token
-            )
-            .exceptionHandling(ex -> ex
-                // Retornar 401 cuando el usuario no está autenticado (en lugar del 403 por defecto)
-                .authenticationEntryPoint((request, response, authException) ->
-                    response.sendError(401, "No autorizado"))
-            )
-            .authenticationProvider(authenticationProvider())
-            .addFilterBefore(jwtAuthFilter, UsernamePasswordAuthenticationFilter.class);
+                .cors(cors -> cors.configurationSource(corsConfigurationSource()))
+                .csrf(AbstractHttpConfigurer::disable)
+                .formLogin(AbstractHttpConfigurer::disable)
+                .httpBasic(AbstractHttpConfigurer::disable)
+                .sessionManagement(session -> session.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
+                .authorizeHttpRequests(auth -> auth
+                        .requestMatchers(HttpMethod.POST, "/api/auth/login").permitAll() // Login público
+                        .requestMatchers(HttpMethod.POST, "/api/auth/recuperar-password").permitAll() // Solicitud de
+                                                                                                      // recuperación
+                        .requestMatchers(HttpMethod.POST, "/api/auth/restablecer-password").permitAll() // Confirmación
+                                                                                                        // con token
+                        .requestMatchers(HttpMethod.OPTIONS, "/**").permitAll() // Preflight CORS
+                        .requestMatchers(
+                                "/swagger-ui/**",
+                                "/swagger-ui.html",
+                                "/v3/api-docs/**")
+                        .permitAll() // Documentación pública
+                        .anyRequest().authenticated() // Todo lo demás requiere token
+                )
+                .exceptionHandling(ex -> ex
+                        // Retornar 401 cuando el usuario no está autenticado (en lugar del 403 por
+                        // defecto)
+                        .authenticationEntryPoint(
+                                (request, response, authException) -> response.sendError(401, "No autorizado")))
+                .authenticationProvider(authenticationProvider())
+                .addFilterBefore(jwtAuthFilter, UsernamePasswordAuthenticationFilter.class);
 
         return http.build();
     }
@@ -117,8 +129,10 @@ public class SecurityConfig {
      * Configura el proveedor de autenticación con el servicio de usuarios y
      * el encoder de contraseñas BCrypt.
      *
-     * <p>Spring Security usa este proveedor durante el login para cargar el
-     * usuario por email y comparar el password ingresado contra el hash en BD.</p>
+     * <p>
+     * Spring Security usa este proveedor durante el login para cargar el
+     * usuario por email y comparar el password ingresado contra el hash en BD.
+     * </p>
      */
     @Bean
     public AuthenticationProvider authenticationProvider() {
@@ -150,7 +164,10 @@ public class SecurityConfig {
     @Bean
     public CorsConfigurationSource corsConfigurationSource() {
         CorsConfiguration config = new CorsConfiguration();
-        config.setAllowedOrigins(List.of("http://localhost:4200"));
+        config.setAllowedOriginPatterns(List.of(
+                "http://localhost:4200",
+                "https://*juandiazdevpos-projects.vercel.app",
+                "https://frontend-siglocc*.vercel.app"));
         config.setAllowedMethods(List.of("GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"));
         config.setAllowedHeaders(List.of("*"));
         config.setAllowCredentials(true);
