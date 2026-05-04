@@ -241,13 +241,13 @@ public class AnticipoDocumentoService {
         firmas.setWidthPercentage(90);
         firmas.setHorizontalAlignment(Element.ALIGN_CENTER);
 
-        PdfPCell f1 = celda(firmas);
+        PdfPCell f1 = celda();
         f1.addElement(parrafo("________________________________", F_NORMAL));
         f1.addElement(parrafo("V.B. Coordinador Nacional", F_VERDE));
         f1.addElement(parrafo("de Liderazgo", F_VERDE));
         firmas.addCell(f1);
 
-        PdfPCell f2 = celda(firmas);
+        PdfPCell f2 = celda();
         f2.addElement(parrafo("________________________________", F_NORMAL));
         f2.addElement(parrafo("Autoriza Coordinación Nacional", F_VERDE));
         f2.addElement(parrafo("de Finanzas", F_VERDE));
@@ -289,7 +289,7 @@ public class AnticipoDocumentoService {
         tabla.addCell(cValor);
     }
 
-    private PdfPCell celda(PdfPTable tabla) {
+    private PdfPCell celda() {
         PdfPCell cell = new PdfPCell();
         cell.setBorder(Rectangle.NO_BORDER);
         cell.setPaddingTop(10);
