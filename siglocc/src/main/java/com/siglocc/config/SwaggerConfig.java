@@ -49,7 +49,7 @@ public class SwaggerConfig {
                                                 .description("Backend del Sistema de Gestión de Logística")
                                                 .version("1.0"))
                                 .addServersItem(new io.swagger.v3.oas.models.servers.Server()
-                                                .url("https://dev.siglocc.org")
-                                                .description("Servidor de desarrollo"));
+                                                .url("/")
+                                                .description("Servidor actual"));
         }
 }
