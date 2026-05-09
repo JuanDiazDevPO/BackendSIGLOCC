@@ -2,6 +2,7 @@ package com.siglocc.controller;
 
 import com.siglocc.dto.AnticipoRequest;
 import com.siglocc.dto.AnticipoResponse;
+import com.siglocc.dto.SaldosEquipoResponse;
 import com.siglocc.repository.SolicitudAnticipoRepository;
 import com.siglocc.service.AnticipoService;
 import io.swagger.v3.oas.annotations.Operation;
@@ -23,11 +24,12 @@ import java.nio.file.Path;
 /**
  * Controlador REST para el módulo de anticipos de presupuesto.
  *
- * <p>Expone tres endpoints:</p>
+ * <p>Expone cuatro endpoints:</p>
  * <ul>
- *   <li>{@code POST  /api/v1/anticipos}             – Crear solicitud de anticipo.</li>
- *   <li>{@code PATCH /api/v1/anticipos/{id}/aprobar} – Aprobar solicitud (solo ENL_RECURSOS).</li>
- *   <li>{@code GET   /api/v1/anticipos/{id}/pdf}     – Descargar el PDF formal de la solicitud.</li>
+ *   <li>{@code GET   /api/v1/anticipos/mis-saldos}   – Consultar saldos disponibles del equipo.</li>
+ *   <li>{@code POST  /api/v1/anticipos}               – Crear solicitud de anticipo.</li>
+ *   <li>{@code PATCH /api/v1/anticipos/{id}/aprobar}  – Aprobar solicitud (solo ENL_RECURSOS).</li>
+ *   <li>{@code GET   /api/v1/anticipos/{id}/pdf}      – Descargar el PDF formal de la solicitud.</li>
  * </ul>
  */
 @RestController
@@ -46,6 +48,19 @@ public class AnticipoController {
                                SolicitudAnticipoRepository solicitudRepo) {
         this.anticipoService = anticipoService;
         this.solicitudRepo   = solicitudRepo;
+    }
+
+    /**
+     * Devuelve los saldos presupuestales del equipo del usuario autenticado
+     * en la temporada activa.
+     */
+    @Operation(summary = "Consultar saldos disponibles",
+               description = "Devuelve presupuesto, ejecutado y disponible por rubro (ENTRENAMIENTO y MENTOREO) " +
+                             "para el equipo del usuario autenticado en la temporada activa. " +
+                             "404 si no hay presupuesto configurado; 409 si no hay temporada activa.")
+    @GetMapping("/mis-saldos")
+    public ResponseEntity<SaldosEquipoResponse> consultarMisSaldos() {
+        return ResponseEntity.ok(anticipoService.consultarMisSaldos());
     }
 
     /**

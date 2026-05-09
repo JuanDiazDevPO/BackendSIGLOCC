@@ -167,7 +167,10 @@ public class SecurityConfig {
         config.setAllowedOriginPatterns(List.of(
                 "http://localhost:4200",
                 "https://*juandiazdevpos-projects.vercel.app",
-                "https://frontend-siglocc*.vercel.app"));
+                "https://frontend-siglocc*.vercel.app",
+                "https://dev.siglocc.org",
+                "https://siglocc.org",
+                "https://www.siglocc.org"));
         config.setAllowedMethods(List.of("GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"));
         config.setAllowedHeaders(List.of("*"));
         config.setAllowCredentials(true);
