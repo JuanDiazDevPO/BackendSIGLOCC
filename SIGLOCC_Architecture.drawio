@@ -1,0 +1,283 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<mxGraphModel dx="1400" dy="900" grid="1" gridSize="10" guides="1" tooltips="1" connect="0" arrows="0" fold="0" page="1" pageScale="1" pageWidth="1654" pageHeight="1169" math="0" shadow="0">
+  <root>
+    <mxCell id="0"/>
+    <mxCell id="1" parent="0"/>
+
+    <!-- ═══════════════════════════════════════════════════════════════
+         TÍTULO
+    ═══════════════════════════════════════════════════════════════ -->
+    <mxCell id="title" value="SIGLOCC — Diagrama de Arquitectura" style="text;html=1;strokeColor=none;fillColor=none;align=center;verticalAlign=middle;whiteSpace=wrap;rounded=0;fontSize=18;fontStyle=1;fontColor=#1A1A1A;" vertex="1" parent="1">
+      <mxGeometry x="527" y="20" width="600" height="36" as="geometry"/>
+    </mxCell>
+    <mxCell id="subtitle" value="Angular 17  ·  Spring Boot 4  ·  AWS (EC2 · RDS · S3)" style="text;html=1;strokeColor=none;fillColor=none;align=center;verticalAlign=middle;whiteSpace=wrap;rounded=0;fontSize=11;fontColor=#6B6B6B;" vertex="1" parent="1">
+      <mxGeometry x="527" y="54" width="600" height="20" as="geometry"/>
+    </mxCell>
+
+    <!-- ═══════════════════════════════════════════════════════════════
+         ACTOR: USUARIOS
+    ═══════════════════════════════════════════════════════════════ -->
+    <mxCell id="users_box" value="" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#F5F5F5;strokeColor=#AAAAAA;strokeWidth=1.5;arcSize=8;" vertex="1" parent="1">
+      <mxGeometry x="60" y="440" width="140" height="120" as="geometry"/>
+    </mxCell>
+    <mxCell id="users_icon" value="👤" style="text;html=1;strokeColor=none;fillColor=none;align=center;verticalAlign=middle;fontSize=28;" vertex="1" parent="1">
+      <mxGeometry x="90" y="455" width="80" height="40" as="geometry"/>
+    </mxCell>
+    <mxCell id="users_label" value="&lt;b&gt;Usuarios&lt;/b&gt;&lt;br/&gt;ERL · ERLE · ENL&lt;br/&gt;&lt;font color=&quot;#888888&quot;&gt;Voluntarios OCC&lt;/font&gt;" style="text;html=1;strokeColor=none;fillColor=none;align=center;verticalAlign=middle;fontSize=10;" vertex="1" parent="1">
+      <mxGeometry x="65" y="495" width="130" height="55" as="geometry"/>
+    </mxCell>
+
+    <!-- ═══════════════════════════════════════════════════════════════
+         AMAZON WEB SERVICES — CONTENEDOR EXTERNO
+    ═══════════════════════════════════════════════════════════════ -->
+    <mxCell id="aws_bg" value="" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#FFFAF0;strokeColor=#FF9900;strokeWidth=2.5;arcSize=3;dashed=0;verticalAlign=top;" vertex="1" parent="1">
+      <mxGeometry x="250" y="90" width="1100" height="860" as="geometry"/>
+    </mxCell>
+    <mxCell id="aws_label" value="☁️  Amazon Web Services" style="text;html=1;strokeColor=none;fillColor=none;align=left;verticalAlign=middle;fontSize=12;fontStyle=1;fontColor=#FF6600;" vertex="1" parent="1">
+      <mxGeometry x="270" y="100" width="260" height="24" as="geometry"/>
+    </mxCell>
+
+    <!-- ─── S3 + CLOUDFRONT ─────────────────────────────────────── -->
+    <mxCell id="cdn_bg" value="" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#FFF3E0;strokeColor=#FF9900;strokeWidth=1.5;arcSize=5;" vertex="1" parent="1">
+      <mxGeometry x="280" y="340" width="200" height="200" as="geometry"/>
+    </mxCell>
+    <mxCell id="cdn_title" value="&lt;b&gt;S3 + CloudFront&lt;/b&gt;" style="text;html=1;strokeColor=none;fillColor=none;align=center;verticalAlign=middle;fontSize=10;fontColor=#E65100;" vertex="1" parent="1">
+      <mxGeometry x="280" y="348" width="200" height="18" as="geometry"/>
+    </mxCell>
+    <mxCell id="angular_box" value="&lt;b&gt;Angular 17 SPA&lt;/b&gt;&lt;br/&gt;&lt;font color=&quot;#888888&quot; style=&quot;font-size:9px&quot;&gt;TypeScript · RxJS · Angular Material&lt;br/&gt;Módulos: Auth · Logística · Finanzas&lt;/font&gt;" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#FF9900;strokeColor=#E65100;strokeWidth=1.5;fontColor=#FFFFFF;fontSize=10;arcSize=8;" vertex="1" parent="1">
+      <mxGeometry x="300" y="380" width="160" height="120" as="geometry"/>
+    </mxCell>
+
+    <!-- ─── EC2 ─────────────────────────────────────────────────── -->
+    <mxCell id="ec2_bg" value="" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#F1F8E9;strokeColor=#558B2F;strokeWidth=2;arcSize=3;" vertex="1" parent="1">
+      <mxGeometry x="530" y="130" width="720" height="680" as="geometry"/>
+    </mxCell>
+    <mxCell id="ec2_title" value="&lt;b&gt;EC2 — Spring Boot 4.0.5 · Java 17 · JAR&lt;/b&gt;" style="text;html=1;strokeColor=none;fillColor=none;align=left;verticalAlign=middle;fontSize=11;fontColor=#33691E;" vertex="1" parent="1">
+      <mxGeometry x="550" y="140" width="380" height="20" as="geometry"/>
+    </mxCell>
+
+    <!-- Spring Security -->
+    <mxCell id="sec_box" value="&lt;b&gt;Spring Security&lt;/b&gt;&lt;br/&gt;&lt;font style=&quot;font-size:9px&quot;&gt;JwtAuthFilter · JwtUtil · SecurityConfig&lt;br/&gt;Stateless · Bearer Token&lt;/font&gt;" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#D32F2F;strokeColor=#B71C1C;strokeWidth=1.5;fontColor=#FFFFFF;fontSize=10;arcSize=8;" vertex="1" parent="1">
+      <mxGeometry x="660" y="170" width="460" height="70" as="geometry"/>
+    </mxCell>
+
+    <!-- Controllers -->
+    <mxCell id="ctrl_bg" value="" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#E8F5E9;strokeColor=#388E3C;strokeWidth=1.5;arcSize=5;" vertex="1" parent="1">
+      <mxGeometry x="550" y="270" width="690" height="200" as="geometry"/>
+    </mxCell>
+    <mxCell id="ctrl_title" value="&lt;b&gt;REST Controllers — /api/v1&lt;/b&gt;&lt;br/&gt;&lt;font color=&quot;#888888&quot; style=&quot;font-size:9px&quot;&gt;GlobalExceptionHandler · SwaggerConfig · Swagger UI&lt;/font&gt;" style="text;html=1;strokeColor=none;fillColor=none;align=center;verticalAlign=middle;fontSize=10;fontColor=#2E7D32;" vertex="1" parent="1">
+      <mxGeometry x="550" y="277" width="690" height="28" as="geometry"/>
+    </mxCell>
+    <!-- Auth controller -->
+    <mxCell id="c_auth" value="&lt;b&gt;Auth&lt;/b&gt;&lt;br/&gt;&lt;font style=&quot;font-size:9px&quot;&gt;AuthController&lt;br/&gt;UsuarioController&lt;br/&gt;/auth · /usuarios&lt;/font&gt;" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#388E3C;strokeColor=#2E7D32;fontColor=#FFFFFF;fontSize=10;arcSize=8;" vertex="1" parent="1">
+      <mxGeometry x="565" y="310" width="140" height="140" as="geometry"/>
+    </mxCell>
+    <!-- Logistica controller -->
+    <mxCell id="c_log" value="&lt;b&gt;Logística&lt;/b&gt;&lt;br/&gt;&lt;font style=&quot;font-size:9px&quot;&gt;IglesiaController&lt;br/&gt;EntregaController&lt;br/&gt;RecepcionController&lt;br/&gt;AsignacionController&lt;br/&gt;CapacitacionController&lt;br/&gt;PuntoEntregaController&lt;/font&gt;" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#388E3C;strokeColor=#2E7D32;fontColor=#FFFFFF;fontSize=10;arcSize=8;" vertex="1" parent="1">
+      <mxGeometry x="720" y="310" width="155" height="140" as="geometry"/>
+    </mxCell>
+    <!-- Finanzas controller -->
+    <mxCell id="c_fin" value="&lt;b&gt;Finanzas&lt;/b&gt;&lt;br/&gt;&lt;font style=&quot;font-size:9px&quot;&gt;AnticipoController&lt;br/&gt;ReporteController&lt;br/&gt;PresupuestoController&lt;br/&gt;/anticipos · /reportes&lt;br/&gt;/presupuesto&lt;/font&gt;" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#388E3C;strokeColor=#2E7D32;fontColor=#FFFFFF;fontSize=10;arcSize=8;" vertex="1" parent="1">
+      <mxGeometry x="890" y="310" width="155" height="140" as="geometry"/>
+    </mxCell>
+    <!-- Operaciones controller -->
+    <mxCell id="c_ops" value="&lt;b&gt;Operaciones&lt;/b&gt;&lt;br/&gt;&lt;font style=&quot;font-size:9px&quot;&gt;TemporadaController&lt;br/&gt;DashboardController&lt;br/&gt;ParametrosController&lt;br/&gt;/temporadas&lt;br/&gt;/dashboard&lt;/font&gt;" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#388E3C;strokeColor=#2E7D32;fontColor=#FFFFFF;fontSize=10;arcSize=8;" vertex="1" parent="1">
+      <mxGeometry x="1060" y="310" width="155" height="140" as="geometry"/>
+    </mxCell>
+
+    <!-- Services -->
+    <mxCell id="svc_bg" value="" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#E3F2FD;strokeColor=#1565C0;strokeWidth=1.5;arcSize=5;" vertex="1" parent="1">
+      <mxGeometry x="550" y="500" width="690" height="180" as="geometry"/>
+    </mxCell>
+    <mxCell id="svc_title" value="&lt;b&gt;Business Services&lt;/b&gt;" style="text;html=1;strokeColor=none;fillColor=none;align=center;verticalAlign=middle;fontSize=10;fontColor=#1565C0;" vertex="1" parent="1">
+      <mxGeometry x="550" y="507" width="690" height="18" as="geometry"/>
+    </mxCell>
+    <!-- Logistics service -->
+    <mxCell id="s_log" value="&lt;b&gt;Logistics Services&lt;/b&gt;&lt;br/&gt;&lt;font style=&quot;font-size:9px&quot;&gt;IglesiaService&lt;br/&gt;EntregaService&lt;br/&gt;AsignacionService&lt;br/&gt;RecepcionService&lt;br/&gt;CapacitacionService&lt;br/&gt;PuntoEntregaService&lt;/font&gt;" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#1565C0;strokeColor=#0D47A1;fontColor=#FFFFFF;fontSize=10;arcSize=8;" vertex="1" parent="1">
+      <mxGeometry x="565" y="530" width="155" height="135" as="geometry"/>
+    </mxCell>
+    <!-- Finance service -->
+    <mxCell id="s_fin" value="&lt;b&gt;Finance Services&lt;/b&gt;&lt;br/&gt;&lt;font style=&quot;font-size:9px&quot;&gt;AnticipoService&lt;br/&gt;ReporteService&lt;br/&gt;PresupuestoService&lt;br/&gt;DashboardService&lt;br/&gt;UsuarioService&lt;/font&gt;" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#1565C0;strokeColor=#0D47A1;fontColor=#FFFFFF;fontSize=10;arcSize=8;" vertex="1" parent="1">
+      <mxGeometry x="735" y="530" width="155" height="135" as="geometry"/>
+    </mxCell>
+    <!-- Auth service -->
+    <mxCell id="s_auth" value="&lt;b&gt;Auth Services&lt;/b&gt;&lt;br/&gt;&lt;font style=&quot;font-size:9px&quot;&gt;UserDetailsServiceImpl&lt;br/&gt;RecuperacionPasswordService&lt;/font&gt;" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#1565C0;strokeColor=#0D47A1;fontColor=#FFFFFF;fontSize=10;arcSize=8;" vertex="1" parent="1">
+      <mxGeometry x="905" y="530" width="155" height="135" as="geometry"/>
+    </mxCell>
+    <!-- Utility service -->
+    <mxCell id="s_util" value="&lt;b&gt;Utility Services&lt;/b&gt;&lt;br/&gt;&lt;font style=&quot;font-size:9px&quot;&gt;EmailService&lt;br/&gt;StorageService&lt;br/&gt;AnticipoDocumentoService&lt;br/&gt;(OpenPDF + Thymeleaf)&lt;/font&gt;" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#1565C0;strokeColor=#0D47A1;fontColor=#FFFFFF;fontSize=10;arcSize=8;" vertex="1" parent="1">
+      <mxGeometry x="1075" y="530" width="155" height="135" as="geometry"/>
+    </mxCell>
+
+    <!-- JPA Repositories -->
+    <mxCell id="repo_box" value="&lt;b&gt;Spring Data JPA — 28 Repositories&lt;/b&gt;&lt;br/&gt;&lt;font style=&quot;font-size:9px&quot;&gt;SolicitudAnticipoRepository · IglesiaRepository · EntregaIglesiaRepository · RecepcionContenedorRepository&lt;br/&gt;AsignacionCabeceraRepository · ReporteMensualRepository · UsuarioRepository · EquipoRepository · +20 más&lt;/font&gt;" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#4A148C;strokeColor=#38006B;fontColor=#FFFFFF;fontSize=10;arcSize=8;" vertex="1" parent="1">
+      <mxGeometry x="565" y="710" width="665" height="75" as="geometry"/>
+    </mxCell>
+
+    <!-- ─── RDS ─────────────────────────────────────────────────── -->
+    <mxCell id="rds_bg" value="" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#E1F5FE;strokeColor=#0277BD;strokeWidth=2;arcSize=5;" vertex="1" parent="1">
+      <mxGeometry x="280" y="130" width="200" height="170" as="geometry"/>
+    </mxCell>
+    <mxCell id="rds_title" value="&lt;b&gt;RDS — MySQL 8.0&lt;/b&gt;" style="text;html=1;strokeColor=none;fillColor=none;align=center;verticalAlign=middle;fontSize=10;fontColor=#01579B;" vertex="1" parent="1">
+      <mxGeometry x="280" y="138" width="200" height="18" as="geometry"/>
+    </mxCell>
+    <mxCell id="rds_icon" value="🗃️" style="text;html=1;strokeColor=none;fillColor=none;align=center;verticalAlign=middle;fontSize=26;" vertex="1" parent="1">
+      <mxGeometry x="330" y="158" width="100" height="36" as="geometry"/>
+    </mxCell>
+    <mxCell id="rds_detail" value="&lt;font style=&quot;font-size:9px&quot;&gt;12 tablas · 2 vistas&lt;br/&gt;usuarios · equipos · iglesias&lt;br/&gt;anticipos · reportes&lt;br/&gt;logística · temporadas&lt;br/&gt;presupuesto · tokens&lt;/font&gt;" style="text;html=1;strokeColor=none;fillColor=none;align=center;verticalAlign=middle;fontSize=10;" vertex="1" parent="1">
+      <mxGeometry x="280" y="196" width="200" height="94" as="geometry"/>
+    </mxCell>
+
+    <!-- ─── S3 FILES ────────────────────────────────────────────── -->
+    <mxCell id="s3_bg" value="" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#FFF3E0;strokeColor=#E65100;strokeWidth=2;arcSize=5;" vertex="1" parent="1">
+      <mxGeometry x="280" y="580" width="200" height="180" as="geometry"/>
+    </mxCell>
+    <mxCell id="s3_title" value="&lt;b&gt;Amazon S3 — Archivos&lt;/b&gt;" style="text;html=1;strokeColor=none;fillColor=none;align=center;verticalAlign=middle;fontSize=10;fontColor=#E65100;" vertex="1" parent="1">
+      <mxGeometry x="280" y="588" width="200" height="18" as="geometry"/>
+    </mxCell>
+    <mxCell id="s3_icon" value="📁" style="text;html=1;strokeColor=none;fillColor=none;align=center;verticalAlign=middle;fontSize=24;" vertex="1" parent="1">
+      <mxGeometry x="340" y="606" width="80" height="32" as="geometry"/>
+    </mxCell>
+    <mxCell id="s3_detail" value="&lt;font style=&quot;font-size:9px&quot;&gt;PDFs Anticipos&lt;br/&gt;Fotos evidencia (contenedor&lt;br/&gt;entregas · niños)&lt;br/&gt;Firmas digitales&lt;br/&gt;Soportes PDF / ZIP&lt;br/&gt;Documentos logística&lt;/font&gt;" style="text;html=1;strokeColor=none;fillColor=none;align=center;verticalAlign=middle;fontSize=10;" vertex="1" parent="1">
+      <mxGeometry x="280" y="638" width="200" height="112" as="geometry"/>
+    </mxCell>
+
+    <!-- ═══════════════════════════════════════════════════════════════
+         SERVICIOS EXTERNOS
+    ═══════════════════════════════════════════════════════════════ -->
+    <!-- Gmail -->
+    <mxCell id="gmail_box" value="&lt;b&gt;Gmail SMTP&lt;/b&gt;&lt;br/&gt;&lt;font style=&quot;font-size:9px&quot;&gt;📧  TLS puerto 587&lt;br/&gt;5 plantillas HTML Thymeleaf&lt;br/&gt;Solicitud recibida · rechazada&lt;br/&gt;aprobada · aprobador&lt;br/&gt;Recuperación contraseña&lt;/font&gt;" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#546E7A;strokeColor=#37474F;fontColor=#FFFFFF;fontSize=10;arcSize=8;" vertex="1" parent="1">
+      <mxGeometry x="1370" y="400" width="220" height="150" as="geometry"/>
+    </mxCell>
+    <!-- SP CDN -->
+    <mxCell id="cdn_box" value="&lt;b&gt;Samaritan's Purse CDN&lt;/b&gt;&lt;br/&gt;&lt;font style=&quot;font-size:9px&quot;&gt;🖼️  sp-comm-arkfiles.s3.theark.cloud&lt;br/&gt;Imágenes OCC en correos HTML&lt;br/&gt;Cargadas por el cliente de correo&lt;/font&gt;" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#546E7A;strokeColor=#37474F;fontColor=#FFFFFF;fontSize=10;arcSize=8;" vertex="1" parent="1">
+      <mxGeometry x="1370" y="600" width="220" height="120" as="geometry"/>
+    </mxCell>
+
+    <!-- ═══════════════════════════════════════════════════════════════
+         FLECHAS / CONEXIONES
+    ═══════════════════════════════════════════════════════════════ -->
+
+    <!-- 1. Usuario → Angular -->
+    <mxCell id="e_user_ang" value="HTTPS" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;exitX=1;exitY=0.5;exitDx=0;exitDy=0;entryX=0;entryY=0.5;entryDx=0;entryDy=0;strokeColor=#FF9900;strokeWidth=2;fontColor=#FF6600;fontStyle=1;fontSize=9;" edge="1" parent="1" source="users_box" target="angular_box">
+      <mxGeometry relative="1" as="geometry"/>
+    </mxCell>
+
+    <!-- 2. Angular → Spring Security -->
+    <mxCell id="e_ang_sec" value="REST + JWT Bearer" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;exitX=1;exitY=0.5;exitDx=0;exitDy=0;entryX=0;entryY=0.5;entryDx=0;entryDy=0;strokeColor=#D32F2F;strokeWidth=2;fontColor=#D32F2F;fontStyle=1;fontSize=9;" edge="1" parent="1" source="angular_box" target="sec_box">
+      <mxGeometry relative="1" as="geometry"/>
+    </mxCell>
+
+    <!-- 3. Security → Controllers (4 flechas hacia abajo) -->
+    <mxCell id="e_sec_ca" value="" style="edgeStyle=orthogonalEdgeStyle;rounded=0;exitX=0.2;exitY=1;exitDx=0;exitDy=0;entryX=0.5;entryY=0;entryDx=0;entryDy=0;strokeColor=#388E3C;strokeWidth=1.5;" edge="1" parent="1" source="sec_box" target="c_auth">
+      <mxGeometry relative="1" as="geometry"/>
+    </mxCell>
+    <mxCell id="e_sec_cl" value="" style="edgeStyle=orthogonalEdgeStyle;rounded=0;exitX=0.4;exitY=1;exitDx=0;exitDy=0;entryX=0.5;entryY=0;entryDx=0;entryDy=0;strokeColor=#388E3C;strokeWidth=1.5;" edge="1" parent="1" source="sec_box" target="c_log">
+      <mxGeometry relative="1" as="geometry"/>
+    </mxCell>
+    <mxCell id="e_sec_cf" value="" style="edgeStyle=orthogonalEdgeStyle;rounded=0;exitX=0.6;exitY=1;exitDx=0;exitDy=0;entryX=0.5;entryY=0;entryDx=0;entryDy=0;strokeColor=#388E3C;strokeWidth=1.5;" edge="1" parent="1" source="sec_box" target="c_fin">
+      <mxGeometry relative="1" as="geometry"/>
+    </mxCell>
+    <mxCell id="e_sec_co" value="" style="edgeStyle=orthogonalEdgeStyle;rounded=0;exitX=0.8;exitY=1;exitDx=0;exitDy=0;entryX=0.5;entryY=0;entryDx=0;entryDy=0;strokeColor=#388E3C;strokeWidth=1.5;" edge="1" parent="1" source="sec_box" target="c_ops">
+      <mxGeometry relative="1" as="geometry"/>
+    </mxCell>
+
+    <!-- 4. Controllers → Services -->
+    <mxCell id="e_ca_sauth" value="" style="edgeStyle=orthogonalEdgeStyle;rounded=0;exitX=0.5;exitY=1;exitDx=0;exitDy=0;entryX=0.5;entryY=0;entryDx=0;entryDy=0;strokeColor=#1565C0;strokeWidth=1.5;" edge="1" parent="1" source="c_auth" target="s_auth">
+      <mxGeometry relative="1" as="geometry"/>
+    </mxCell>
+    <mxCell id="e_cl_slog" value="" style="edgeStyle=orthogonalEdgeStyle;rounded=0;exitX=0.5;exitY=1;exitDx=0;exitDy=0;entryX=0.5;entryY=0;entryDx=0;entryDy=0;strokeColor=#1565C0;strokeWidth=1.5;" edge="1" parent="1" source="c_log" target="s_log">
+      <mxGeometry relative="1" as="geometry"/>
+    </mxCell>
+    <mxCell id="e_cf_sfin" value="" style="edgeStyle=orthogonalEdgeStyle;rounded=0;exitX=0.5;exitY=1;exitDx=0;exitDy=0;entryX=0.5;entryY=0;entryDx=0;entryDy=0;strokeColor=#1565C0;strokeWidth=1.5;" edge="1" parent="1" source="c_fin" target="s_fin">
+      <mxGeometry relative="1" as="geometry"/>
+    </mxCell>
+    <mxCell id="e_co_sutil" value="" style="edgeStyle=orthogonalEdgeStyle;rounded=0;exitX=0.5;exitY=1;exitDx=0;exitDy=0;entryX=0.5;entryY=0;entryDx=0;entryDy=0;strokeColor=#1565C0;strokeWidth=1.5;" edge="1" parent="1" source="c_ops" target="s_util">
+      <mxGeometry relative="1" as="geometry"/>
+    </mxCell>
+
+    <!-- 5. Services → Repositories -->
+    <mxCell id="e_slog_repo" value="" style="edgeStyle=orthogonalEdgeStyle;rounded=0;exitX=0.5;exitY=1;exitDx=0;exitDy=0;entryX=0.2;entryY=1;entryDx=0;entryDy=0;strokeColor=#4A148C;strokeWidth=1.5;" edge="1" parent="1" source="s_log" target="repo_box">
+      <mxGeometry relative="1" as="geometry"/>
+    </mxCell>
+    <mxCell id="e_sfin_repo" value="" style="edgeStyle=orthogonalEdgeStyle;rounded=0;exitX=0.5;exitY=1;exitDx=0;exitDy=0;entryX=0.38;entryY=1;entryDx=0;entryDy=0;strokeColor=#4A148C;strokeWidth=1.5;" edge="1" parent="1" source="s_fin" target="repo_box">
+      <mxGeometry relative="1" as="geometry"/>
+    </mxCell>
+    <mxCell id="e_sauth_repo" value="" style="edgeStyle=orthogonalEdgeStyle;rounded=0;exitX=0.5;exitY=1;exitDx=0;exitDy=0;entryX=0.56;entryY=1;entryDx=0;entryDy=0;strokeColor=#4A148C;strokeWidth=1.5;" edge="1" parent="1" source="s_auth" target="repo_box">
+      <mxGeometry relative="1" as="geometry"/>
+    </mxCell>
+    <mxCell id="e_sutil_repo" value="" style="edgeStyle=orthogonalEdgeStyle;rounded=0;exitX=0.5;exitY=1;exitDx=0;exitDy=0;entryX=0.75;entryY=1;entryDx=0;entryDy=0;strokeColor=#4A148C;strokeWidth=1.5;" edge="1" parent="1" source="s_util" target="repo_box">
+      <mxGeometry relative="1" as="geometry"/>
+    </mxCell>
+
+    <!-- 6. Repositories → RDS -->
+    <mxCell id="e_repo_rds" value="JPA / Hibernate" style="edgeStyle=orthogonalEdgeStyle;rounded=0;exitX=0;exitY=0.5;exitDx=0;exitDy=0;entryX=1;entryY=0.5;entryDx=0;entryDy=0;strokeColor=#0277BD;strokeWidth=2;fontColor=#0277BD;fontStyle=1;fontSize=9;" edge="1" parent="1" source="repo_box" target="rds_bg">
+      <mxGeometry relative="1" as="geometry"/>
+    </mxCell>
+
+    <!-- 7. StorageService → S3 -->
+    <mxCell id="e_sutil_s3" value="write / read" style="edgeStyle=orthogonalEdgeStyle;rounded=0;exitX=0;exitY=0.5;exitDx=0;exitDy=0;entryX=1;entryY=0.5;entryDx=0;entryDy=0;strokeColor=#E65100;strokeWidth=2;fontColor=#E65100;fontStyle=1;fontSize=9;" edge="1" parent="1" source="s_util" target="s3_bg">
+      <mxGeometry relative="1" as="geometry"/>
+    </mxCell>
+
+    <!-- 8. EmailService → Gmail -->
+    <mxCell id="e_sutil_gmail" value="SMTP TLS 587" style="edgeStyle=orthogonalEdgeStyle;rounded=0;exitX=1;exitY=0.5;exitDx=0;exitDy=0;entryX=0;entryY=0.5;entryDx=0;entryDy=0;strokeColor=#546E7A;strokeWidth=2;fontColor=#37474F;fontStyle=1;fontSize=9;" edge="1" parent="1" source="s_util" target="gmail_box">
+      <mxGeometry relative="1" as="geometry"/>
+    </mxCell>
+
+    <!-- 9. Gmail → SP CDN (dotted) -->
+    <mxCell id="e_gmail_cdn" value="img src (cliente correo)" style="edgeStyle=orthogonalEdgeStyle;rounded=0;exitX=0.5;exitY=1;exitDx=0;exitDy=0;entryX=0.5;entryY=0;entryDx=0;entryDy=0;strokeColor=#90A4AE;strokeWidth=1.5;dashed=1;fontColor=#90A4AE;fontSize=9;" edge="1" parent="1" source="gmail_box" target="cdn_box">
+      <mxGeometry relative="1" as="geometry"/>
+    </mxCell>
+
+    <!-- ═══════════════════════════════════════════════════════════════
+         LEYENDA
+    ═══════════════════════════════════════════════════════════════ -->
+    <mxCell id="legend_bg" value="" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#FAFAFA;strokeColor=#AAAAAA;strokeWidth=1;arcSize=5;" vertex="1" parent="1">
+      <mxGeometry x="60" y="620" width="170" height="230" as="geometry"/>
+    </mxCell>
+    <mxCell id="legend_title" value="&lt;b&gt;Leyenda&lt;/b&gt;" style="text;html=1;strokeColor=none;fillColor=none;align=center;verticalAlign=middle;fontSize=10;" vertex="1" parent="1">
+      <mxGeometry x="60" y="628" width="170" height="18" as="geometry"/>
+    </mxCell>
+    <mxCell id="leg1" value="" style="rounded=1;fillColor=#388E3C;strokeColor=none;" vertex="1" parent="1">
+      <mxGeometry x="74" y="656" width="16" height="16" as="geometry"/>
+    </mxCell>
+    <mxCell id="leg1t" value="REST Controllers" style="text;html=1;strokeColor=none;fillColor=none;align=left;verticalAlign=middle;fontSize=9;" vertex="1" parent="1">
+      <mxGeometry x="98" y="654" width="120" height="20" as="geometry"/>
+    </mxCell>
+    <mxCell id="leg2" value="" style="rounded=1;fillColor=#1565C0;strokeColor=none;" vertex="1" parent="1">
+      <mxGeometry x="74" y="682" width="16" height="16" as="geometry"/>
+    </mxCell>
+    <mxCell id="leg2t" value="Business Services" style="text;html=1;strokeColor=none;fillColor=none;align=left;verticalAlign=middle;fontSize=9;" vertex="1" parent="1">
+      <mxGeometry x="98" y="680" width="120" height="20" as="geometry"/>
+    </mxCell>
+    <mxCell id="leg3" value="" style="rounded=1;fillColor=#4A148C;strokeColor=none;" vertex="1" parent="1">
+      <mxGeometry x="74" y="708" width="16" height="16" as="geometry"/>
+    </mxCell>
+    <mxCell id="leg3t" value="JPA Repositories" style="text;html=1;strokeColor=none;fillColor=none;align=left;verticalAlign=middle;fontSize=9;" vertex="1" parent="1">
+      <mxGeometry x="98" y="706" width="120" height="20" as="geometry"/>
+    </mxCell>
+    <mxCell id="leg4" value="" style="rounded=1;fillColor=#0277BD;strokeColor=none;" vertex="1" parent="1">
+      <mxGeometry x="74" y="734" width="16" height="16" as="geometry"/>
+    </mxCell>
+    <mxCell id="leg4t" value="RDS MySQL" style="text;html=1;strokeColor=none;fillColor=none;align=left;verticalAlign=middle;fontSize=9;" vertex="1" parent="1">
+      <mxGeometry x="98" y="732" width="120" height="20" as="geometry"/>
+    </mxCell>
+    <mxCell id="leg5" value="" style="rounded=1;fillColor=#E65100;strokeColor=none;" vertex="1" parent="1">
+      <mxGeometry x="74" y="760" width="16" height="16" as="geometry"/>
+    </mxCell>
+    <mxCell id="leg5t" value="Amazon S3" style="text;html=1;strokeColor=none;fillColor=none;align=left;verticalAlign=middle;fontSize=9;" vertex="1" parent="1">
+      <mxGeometry x="98" y="758" width="120" height="20" as="geometry"/>
+    </mxCell>
+    <mxCell id="leg6" value="" style="rounded=1;fillColor=#546E7A;strokeColor=none;" vertex="1" parent="1">
+      <mxGeometry x="74" y="786" width="16" height="16" as="geometry"/>
+    </mxCell>
+    <mxCell id="leg6t" value="Servicios Externos" style="text;html=1;strokeColor=none;fillColor=none;align=left;verticalAlign=middle;fontSize=9;" vertex="1" parent="1">
+      <mxGeometry x="98" y="784" width="120" height="20" as="geometry"/>
+    </mxCell>
+    <mxCell id="leg7t" value="- - -  Referencia indirecta" style="text;html=1;strokeColor=none;fillColor=none;align=left;verticalAlign=middle;fontSize=9;fontColor=#90A4AE;" vertex="1" parent="1">
+      <mxGeometry x="74" y="810" width="150" height="20" as="geometry"/>
+    </mxCell>
+
+  </root>
+</mxGraphModel>

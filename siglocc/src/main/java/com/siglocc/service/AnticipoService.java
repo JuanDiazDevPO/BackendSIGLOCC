@@ -2,13 +2,17 @@ package com.siglocc.service;
 
 import com.siglocc.dto.AnticipoRequest;
 import com.siglocc.dto.AnticipoResponse;
+import com.siglocc.dto.SaldosEquipoResponse;
 import com.siglocc.entity.*;
+import com.siglocc.repository.EquipoRepository;
 import com.siglocc.repository.SolicitudAnticipoRepository;
 import com.siglocc.repository.TemporadaRepository;
 import com.siglocc.repository.UsuarioRepository;
 import com.siglocc.repository.VistaControlSaldosRepository;
+import com.siglocc.security.JwtAuthDetails;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.security.core.Authentication;
 import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -18,6 +22,7 @@ import org.springframework.transaction.support.TransactionSynchronizationManager
 import java.math.BigDecimal;
 import java.time.LocalDateTime;
 import java.util.Map;
+import java.util.NoSuchElementException;
 
 /**
  * Servicio que contiene la lógica de negocio del módulo de anticipos.
@@ -45,6 +50,7 @@ public class AnticipoService {
     private final VistaControlSaldosRepository saldosRepo;
     private final UsuarioRepository usuarioRepository;
     private final TemporadaRepository temporadaRepository;
+    private final EquipoRepository equipoRepository;
     private final EmailService emailService;
     private final AnticipoDocumentoService documentoService;
     private final StorageService storageService;
@@ -53,6 +59,7 @@ public class AnticipoService {
                            VistaControlSaldosRepository saldosRepo,
                            UsuarioRepository usuarioRepository,
                            TemporadaRepository temporadaRepository,
+                           EquipoRepository equipoRepository,
                            EmailService emailService,
                            AnticipoDocumentoService documentoService,
                            StorageService storageService) {
@@ -60,6 +67,7 @@ public class AnticipoService {
         this.saldosRepo       = saldosRepo;
         this.usuarioRepository = usuarioRepository;
         this.temporadaRepository = temporadaRepository;
+        this.equipoRepository  = equipoRepository;
         this.emailService     = emailService;
         this.documentoService = documentoService;
         this.storageService   = storageService;
@@ -258,6 +266,54 @@ public class AnticipoService {
 
         return new AnticipoResponse(solicitud.getId(), EstadoSolicitud.APROBADO.name(),
                 "Solicitud aprobada exitosamente.", solicitud.getRutaPdf());
+    }
+
+    /**
+     * Devuelve los saldos presupuestales del equipo del usuario autenticado
+     * en la temporada activa.
+     *
+     * <p>El {@code equipoId} se extrae de {@link JwtAuthDetails} en el
+     * {@code SecurityContextHolder}; nunca proviene del cliente.</p>
+     *
+     * @return DTO con presupuesto, ejecutado y disponible por rubro
+     * @throws IllegalStateException    si no hay temporada activa (→ 409)
+     * @throws NoSuchElementException   si el equipo no tiene presupuesto configurado (→ 404)
+     */
+    public SaldosEquipoResponse consultarMisSaldos() {
+        Authentication auth = SecurityContextHolder.getContext().getAuthentication();
+        JwtAuthDetails details = (JwtAuthDetails) auth.getDetails();
+        Integer equipoId = details.equipoId();
+
+        Temporada temporada = temporadaRepository.findByEsActualTrue()
+                .orElseThrow(() -> new IllegalStateException("No hay una temporada activa configurada."));
+
+        VistaControlSaldos saldos = saldosRepo.findById(
+                new VistaControlSaldosId(equipoId, temporada.getId())
+        ).orElseThrow(() -> new NoSuchElementException(
+                "No hay presupuesto configurado para el equipo en la temporada activa."));
+
+        String nombreEquipo = equipoRepository.findById(equipoId)
+                .map(Equipo::getNombre)
+                .orElse("Equipo " + equipoId);
+
+        SaldosEquipoResponse.RubroSaldo mentoreo = saldos.getPresupuestoMentoreo() != null
+                ? new SaldosEquipoResponse.RubroSaldo(
+                        saldos.getPresupuestoMentoreo(),
+                        saldos.getEjecutadoMentoreo() != null ? saldos.getEjecutadoMentoreo() : BigDecimal.ZERO,
+                        saldos.getSaldoMentoreo())
+                : null;
+
+        return new SaldosEquipoResponse(
+                equipoId,
+                nombreEquipo,
+                temporada.getId(),
+                new SaldosEquipoResponse.RubroSaldo(
+                        saldos.getPresupuestoEntrenamiento(),
+                        saldos.getEjecutadoEntrenamiento() != null ? saldos.getEjecutadoEntrenamiento() : BigDecimal.ZERO,
+                        saldos.getSaldoEntrenamiento()
+                ),
+                mentoreo
+        );
     }
 
     // ── Privados ──────────────────────────────────────────────────────────

@@ -61,10 +61,11 @@ public class VistaControlSaldos {
 
     /**
      * Calcula el saldo disponible para mentoreo.
-     * @return presupuesto_mentoreo - ejecutado_mentoreo
+     * @return presupuesto_mentoreo - ejecutado_mentoreo, o {@code null} si el rubro no está configurado
      */
     public BigDecimal getSaldoMentoreo() {
-        return presupuestoMentoreo.subtract(ejecutadoMentoreo);
+        if (presupuestoMentoreo == null) return null;
+        return presupuestoMentoreo.subtract(ejecutadoMentoreo != null ? ejecutadoMentoreo : BigDecimal.ZERO);
     }
 
     public BigDecimal getPresupuestoEntrenamiento() { return presupuestoEntrenamiento; }
