@@ -1,6 +1,8 @@
 package com.siglocc.service;
 
+import com.siglocc.dto.EquipoItemResponse;
 import com.siglocc.dto.RegistroRequest;
+import com.siglocc.dto.RolResponse;
 import com.siglocc.dto.UsuarioResponse;
 import com.siglocc.entity.Equipo;
 import com.siglocc.entity.Rol;
@@ -10,6 +12,8 @@ import com.siglocc.repository.RolRepository;
 import com.siglocc.repository.UsuarioRepository;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
+
+import java.util.List;
 
 /**
  * Servicio que contiene la lógica de negocio para la gestión de usuarios.
@@ -80,5 +84,27 @@ public class UsuarioService {
                 saved.getRol().getName(),
                 saved.getEquipo().getNombre()
         );
+    }
+
+    /**
+     * Retorna todos los roles disponibles en el sistema.
+     *
+     * @return lista de roles con id y nombre
+     */
+    public List<RolResponse> listarRoles() {
+        return rolRepository.findAll().stream()
+                .map(r -> new RolResponse(r.getId(), r.getName()))
+                .toList();
+    }
+
+    /**
+     * Retorna todos los equipos registrados en el sistema.
+     *
+     * @return lista de equipos con id, nombre y tipo jerárquico
+     */
+    public List<EquipoItemResponse> listarEquipos() {
+        return equipoRepository.findAll().stream()
+                .map(e -> new EquipoItemResponse(e.getId(), e.getNombre(), e.getTipo().name()))
+                .toList();
     }
 }
