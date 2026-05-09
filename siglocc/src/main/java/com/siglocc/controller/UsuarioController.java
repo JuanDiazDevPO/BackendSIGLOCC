@@ -1,29 +1,35 @@
 package com.siglocc.controller;
 
+import com.siglocc.dto.EquipoItemResponse;
 import com.siglocc.dto.RegistroRequest;
+import com.siglocc.dto.RolResponse;
 import com.siglocc.dto.UsuarioResponse;
 import com.siglocc.service.UsuarioService;
+import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.security.SecurityRequirement;
+import io.swagger.v3.oas.annotations.tags.Tag;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.*;
 
+import java.util.List;
 import java.util.Map;
 
 /**
  * Controlador REST para la gestión de usuarios.
  *
- * <p>Actualmente expone el endpoint de registro de nuevos usuarios.
- * Solo los roles {@code ENL_RECURSOS} y {@code ENL_LOGISTICA} tienen
- * permiso para crear usuarios; cualquier otro rol recibirá HTTP 403.</p>
- *
- * <p>{@code @SecurityRequirement} le indica a Swagger que este controlador
- * requiere el token JWT (muestra el candado 🔒 en la documentación).</p>
+ * <p>Expone tres endpoints, todos restringidos a {@code ENL_RECURSOS} y {@code ENL_LOGISTICA}:</p>
+ * <ul>
+ *   <li>{@code POST /api/usuarios}         – Registrar nuevo usuario.</li>
+ *   <li>{@code GET  /api/usuarios/roles}   – Listar roles disponibles.</li>
+ *   <li>{@code GET  /api/usuarios/equipos} – Listar equipos disponibles.</li>
+ * </ul>
  */
 @RestController
 @RequestMapping("/api/usuarios")
 @SecurityRequirement(name = "bearerAuth")
+@Tag(name = "Usuarios", description = "Gestión de usuarios del sistema")
 public class UsuarioController {
 
     private final UsuarioService usuarioService;
@@ -46,6 +52,26 @@ public class UsuarioController {
     @PreAuthorize("hasAnyRole('ENL_RECURSOS', 'ENL_LOGISTICA')")
     public ResponseEntity<UsuarioResponse> registrar(@RequestBody RegistroRequest request) {
         return ResponseEntity.status(HttpStatus.CREATED).body(usuarioService.registrar(request));
+    }
+
+    /**
+     * Retorna todos los roles disponibles para asignar al registrar un usuario.
+     */
+    @Operation(summary = "Listar roles", description = "Devuelve todos los roles del sistema.")
+    @GetMapping("/roles")
+    @PreAuthorize("hasAnyRole('ENL_RECURSOS', 'ENL_LOGISTICA')")
+    public ResponseEntity<List<RolResponse>> listarRoles() {
+        return ResponseEntity.ok(usuarioService.listarRoles());
+    }
+
+    /**
+     * Retorna todos los equipos disponibles para asignar al registrar un usuario.
+     */
+    @Operation(summary = "Listar equipos", description = "Devuelve todos los equipos con id, nombre y tipo jerárquico.")
+    @GetMapping("/equipos")
+    @PreAuthorize("hasAnyRole('ENL_RECURSOS', 'ENL_LOGISTICA')")
+    public ResponseEntity<List<EquipoItemResponse>> listarEquipos() {
+        return ResponseEntity.ok(usuarioService.listarEquipos());
     }
 
     /**

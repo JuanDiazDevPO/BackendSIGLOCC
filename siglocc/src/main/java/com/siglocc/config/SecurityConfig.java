@@ -166,6 +166,7 @@ public class SecurityConfig {
         CorsConfiguration config = new CorsConfiguration();
         config.setAllowedOriginPatterns(List.of(
                 "http://localhost:4200",
+                "http://localhost:8080",
                 "https://*juandiazdevpos-projects.vercel.app",
                 "https://frontend-siglocc*.vercel.app",
                 "https://dev.siglocc.org",
