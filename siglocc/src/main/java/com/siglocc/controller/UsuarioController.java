@@ -55,6 +55,28 @@ public class UsuarioController {
     }
 
     /**
+     * Inactiva un usuario impidiendo que pueda iniciar sesión.
+     */
+    @Operation(summary = "Inactivar usuario", description = "Bloquea el acceso del usuario sin eliminarlo de la BD.")
+    @PatchMapping("/{id}/inactivar")
+    @PreAuthorize("hasAnyRole('ENL_RECURSOS', 'ENL_LOGISTICA')")
+    public ResponseEntity<Map<String, String>> inactivar(@PathVariable Integer id) {
+        usuarioService.inactivarUsuario(id);
+        return ResponseEntity.ok(Map.of("mensaje", "Usuario inactivado correctamente."));
+    }
+
+    /**
+     * Reactiva un usuario permitiéndole volver a iniciar sesión.
+     */
+    @Operation(summary = "Activar usuario", description = "Restaura el acceso de un usuario previamente inactivado.")
+    @PatchMapping("/{id}/activar")
+    @PreAuthorize("hasAnyRole('ENL_RECURSOS', 'ENL_LOGISTICA')")
+    public ResponseEntity<Map<String, String>> activar(@PathVariable Integer id) {
+        usuarioService.activarUsuario(id);
+        return ResponseEntity.ok(Map.of("mensaje", "Usuario activado correctamente."));
+    }
+
+    /**
      * Retorna todos los roles disponibles para asignar al registrar un usuario.
      */
     @Operation(summary = "Listar roles", description = "Devuelve todos los roles del sistema.")

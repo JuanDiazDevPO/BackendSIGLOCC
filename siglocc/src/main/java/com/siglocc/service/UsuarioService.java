@@ -12,8 +12,10 @@ import com.siglocc.repository.RolRepository;
 import com.siglocc.repository.UsuarioRepository;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
 
 import java.util.List;
+import java.util.NoSuchElementException;
 
 /**
  * Servicio que contiene la lógica de negocio para la gestión de usuarios.
@@ -84,6 +86,34 @@ public class UsuarioService {
                 saved.getRol().getName(),
                 saved.getEquipo().getNombre()
         );
+    }
+
+    /**
+     * Inactiva un usuario impidiendo que pueda iniciar sesión.
+     *
+     * @param id ID del usuario a inactivar
+     * @throws NoSuchElementException si no existe un usuario con ese ID (→ 404)
+     */
+    @Transactional
+    public void inactivarUsuario(Integer id) {
+        Usuario usuario = usuarioRepository.findById(id)
+                .orElseThrow(() -> new NoSuchElementException("Usuario no encontrado con id: " + id));
+        usuario.setActivo(false);
+        usuarioRepository.save(usuario);
+    }
+
+    /**
+     * Reactiva un usuario permitiéndole volver a iniciar sesión.
+     *
+     * @param id ID del usuario a reactivar
+     * @throws NoSuchElementException si no existe un usuario con ese ID (→ 404)
+     */
+    @Transactional
+    public void activarUsuario(Integer id) {
+        Usuario usuario = usuarioRepository.findById(id)
+                .orElseThrow(() -> new NoSuchElementException("Usuario no encontrado con id: " + id));
+        usuario.setActivo(true);
+        usuarioRepository.save(usuario);
     }
 
     /**
