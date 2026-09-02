@@ -3,12 +3,15 @@ package com.siglocc.service;
 import com.siglocc.dto.DashboardItemResponse;
 import com.siglocc.entity.VistaDashboardFinanciero;
 import com.siglocc.repository.VistaDashboardFinancieroRepository;
+import com.siglocc.security.IdentidadJwtException;
 import com.siglocc.security.JwtAuthDetails;
 import org.springframework.security.core.Authentication;
 import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.stereotype.Service;
 
+import java.util.Comparator;
 import java.util.List;
+import java.util.Map;
 
 /**
  * Servicio que implementa el algoritmo de filtrado jerárquico del Dashboard financiero.
@@ -32,6 +35,23 @@ import java.util.List;
 @Service
 public class DashboardService {
 
+    /** Orden de lectura de cada tipo de equipo dentro de un mismo clúster ERLE: ENL, luego ERLE, luego sus ERL. */
+    private static final Map<String, Integer> ORDEN_TIPO = Map.of("ENL", 0, "ERLE", 1, "ERL", 2);
+
+    /**
+     * Ordena el consolidado para que el front pueda indentar la jerarquía sin
+     * necesitar {@code erleId}/{@code enlId} en el DTO: agrupa cada ERLE con sus
+     * ERL subordinados usando {@code coalesce(erleId, equipoId)} como clave de
+     * clúster, y dentro de un mismo clúster respeta ENL → ERLE → ERL.
+     */
+    private static final Comparator<VistaDashboardFinanciero> ORDEN_JERARQUICO = Comparator
+            .comparing((VistaDashboardFinanciero v) -> v.getEnlId(),
+                    Comparator.nullsLast(Comparator.naturalOrder()))
+            .thenComparing(v -> v.getErleId() != null ? v.getErleId() : v.getId().getEquipoId())
+            .thenComparing(v -> ORDEN_TIPO.getOrDefault(v.getEquipoTipo(), Integer.MAX_VALUE))
+            .thenComparing(VistaDashboardFinanciero::getEquipoNombre,
+                    Comparator.nullsLast(Comparator.naturalOrder()));
+
     private final VistaDashboardFinancieroRepository dashboardRepo;
 
     public DashboardService(VistaDashboardFinancieroRepository dashboardRepo) {
@@ -51,7 +71,7 @@ public class DashboardService {
      *
      * @param temporadaId ID de la temporada a consultar (viene como query param del request)
      * @return lista de filas del dashboard visibles para el usuario según su jerarquía
-     * @throws IllegalStateException si el token no contiene la identidad jerárquica
+     * @throws IdentidadJwtException si el token no contiene la identidad jerárquica
      *                               (no debería ocurrir en producción si el login es correcto)
      * @throws IllegalArgumentException si el tipo de equipo no es ENL, ERLE ni ERL
      */
@@ -59,7 +79,7 @@ public class DashboardService {
         Authentication auth = SecurityContextHolder.getContext().getAuthentication();
 
         if (!(auth.getDetails() instanceof JwtAuthDetails details)) {
-            throw new IllegalStateException(
+            throw new IdentidadJwtException(
                     "El token no contiene identidad jerárquica. Vuelve a iniciar sesión.");
         }
 
@@ -80,7 +100,7 @@ public class DashboardService {
                     "Tipo de equipo no reconocido en el token: " + equipoTipo);
         };
 
-        return filas.stream().map(this::toResponse).toList();
+        return filas.stream().sorted(ORDEN_JERARQUICO).map(this::toResponse).toList();
     }
 
     /**

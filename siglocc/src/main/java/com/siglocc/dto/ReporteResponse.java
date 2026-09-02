@@ -16,6 +16,8 @@ import java.util.List;
  *
  * @param id                   ID autoincremental del reporte.
  * @param equipoId             ID del equipo que generó el reporte.
+ * @param nombreEquipo         nombre descriptivo del equipo, o {@code null} si el equipo
+ *                             ya no existe en la tabla {@code equipos}.
  * @param temporadaId          ID de la temporada.
  * @param mes                  mes del período (1-12).
  * @param anio                 año del período.
@@ -35,6 +37,7 @@ import java.util.List;
 public record ReporteResponse(
         Integer id,
         Integer equipoId,
+        String nombreEquipo,
         Integer temporadaId,
         Integer mes,
         Integer anio,

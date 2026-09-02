@@ -2,9 +2,11 @@ package com.siglocc.controller;
 
 import com.siglocc.dto.ActualizarTasaCambioRequest;
 import com.siglocc.dto.ClonarParametrosRequest;
+import com.siglocc.dto.ParametrosDetalleResponse;
 import com.siglocc.dto.ParametrosRequest;
 import com.siglocc.dto.ParametrosResponse;
 import com.siglocc.service.ParametrosService;
+import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.security.SecurityRequirement;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
@@ -20,8 +22,9 @@ import java.util.Map;
  * ya que son operaciones administrativas que afectan el cálculo de presupuestos
  * de toda la red de equipos.</p>
  *
- * <p>Expone tres endpoints:</p>
+ * <p>Expone cuatro endpoints:</p>
  * <ul>
+ *   <li>{@code GET  /api/v1/parametros/{temporadaId}} – Consultar el detalle de una temporada.</li>
  *   <li>{@code POST /api/v1/parametros} – Crear o actualizar parámetros de una temporada.</li>
  *   <li>{@code POST /api/v1/parametros/clonar} – Clonar parámetros entre temporadas.</li>
  *   <li>{@code PATCH /api/v1/parametros/{temporadaId}/tasa-cambio} – Actualizar solo la TRM.</li>
@@ -37,6 +40,23 @@ public class ParametrosController {
 
     public ParametrosController(ParametrosService parametrosService) {
         this.parametrosService = parametrosService;
+    }
+
+    /**
+     * Consulta el detalle completo de los parámetros configurados para una temporada.
+     *
+     * <p>Pensado para pintar en pantalla los valores vigentes al consultar una temporada.</p>
+     *
+     * @param temporadaId ID de la temporada a consultar
+     * @return HTTP 200 con todos los valores configurados
+     * @throws IllegalArgumentException si el ENL aún no configuró parámetros para esa temporada
+     */
+    @Operation(summary = "Consultar parámetros de una temporada",
+               description = "Retorna el detalle completo de los parámetros financieros configurados " +
+                             "para la temporada indicada. HTTP 400 si aún no se han configurado.")
+    @GetMapping("/{temporadaId}")
+    public ResponseEntity<ParametrosDetalleResponse> obtener(@PathVariable Integer temporadaId) {
+        return ResponseEntity.ok(parametrosService.obtener(temporadaId));
     }
 
     /**
