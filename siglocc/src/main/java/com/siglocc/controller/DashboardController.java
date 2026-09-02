@@ -7,7 +7,6 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
 import java.util.List;
-import java.util.Map;
 
 /**
  * Controlador REST para el Dashboard financiero consolidado.
@@ -53,14 +52,5 @@ public class DashboardController {
     public ResponseEntity<List<DashboardItemResponse>> getConsolidado(
             @RequestParam Integer temporadaId) {
         return ResponseEntity.ok(dashboardService.getConsolidado(temporadaId));
-    }
-
-    /**
-     * Maneja errores de token inválido o tipo de equipo no reconocido.
-     * Retorna HTTP 400 con el mensaje descriptivo del error.
-     */
-    @ExceptionHandler({IllegalArgumentException.class, IllegalStateException.class})
-    public ResponseEntity<Map<String, String>> handleErrors(RuntimeException ex) {
-        return ResponseEntity.badRequest().body(Map.of("error", ex.getMessage()));
     }
 }

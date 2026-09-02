@@ -2,6 +2,7 @@ package com.siglocc.service;
 
 import com.siglocc.dto.ActualizarTasaCambioRequest;
 import com.siglocc.dto.ClonarParametrosRequest;
+import com.siglocc.dto.ParametrosDetalleResponse;
 import com.siglocc.dto.ParametrosRequest;
 import com.siglocc.dto.ParametrosResponse;
 import com.siglocc.entity.ParametrosNconnect;
@@ -12,8 +13,9 @@ import org.springframework.transaction.annotation.Transactional;
 /**
  * Servicio que gestiona los parámetros financieros globales del módulo ENL.
  *
- * <p>Implementa tres operaciones administrativas:</p>
+ * <p>Implementa cuatro operaciones administrativas:</p>
  * <ul>
+ *   <li>{@link #obtener} – Consulta el detalle completo de los parámetros de una temporada.</li>
  *   <li>{@link #guardar} – Crea o actualiza los parámetros de una temporada.</li>
  *   <li>{@link #clonar} – Copia todos los parámetros de una temporada a otra.</li>
  *   <li>{@link #actualizarTasaCambio} – Actualiza solo la TRM en tiempo real.</li>
@@ -30,6 +32,40 @@ public class ParametrosService {
 
     public ParametrosService(ParametrosNconnectRepository parametrosRepo) {
         this.parametrosRepo = parametrosRepo;
+    }
+
+    /**
+     * Consulta el detalle completo de los parámetros financieros configurados
+     * para una temporada, para pintarlos en pantalla.
+     *
+     * @param temporadaId ID de la temporada a consultar
+     * @return DTO con todos los valores configurados
+     * @throws IllegalArgumentException si el ENL aún no configuró parámetros para esa temporada
+     */
+    public ParametrosDetalleResponse obtener(Integer temporadaId) {
+        ParametrosNconnect p = parametrosRepo
+                .findByTemporadaId(temporadaId)
+                .orElseThrow(() -> new IllegalArgumentException(
+                        "No existen parámetros configurados para la temporada: " + temporadaId));
+
+        return new ParametrosDetalleResponse(
+                p.getId(),
+                p.getTemporadaId(),
+                p.getTasaCambio(),
+                p.getCajasPorContenedor(),
+                p.getPorcentajeLga(),
+                p.getUsdAdminCm(),
+                p.getUsdRefrigeroPv(),
+                p.getUsdTransportePv(),
+                p.getUsdTransporteCap(),
+                p.getUsdRefrierioCap(),
+                p.getVisitasMentoreo(),
+                p.getPersonasPorVisita(),
+                p.getUsdTransporteMentoreo(),
+                p.getUsdAlimentoMentoreo(),
+                p.getUsdHospedajeMentoreo(),
+                p.getUsdAdminMentoreo()
+        );
     }
 
     /**

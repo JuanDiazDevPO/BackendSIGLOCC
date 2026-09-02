@@ -3,6 +3,7 @@ package com.siglocc.service;
 import com.siglocc.dto.*;
 import com.siglocc.entity.*;
 import com.siglocc.repository.*;
+import com.siglocc.security.IdentidadJwtException;
 import com.siglocc.security.JwtAuthDetails;
 import edu.umd.cs.findbugs.annotations.SuppressFBWarnings;
 import org.springframework.security.core.Authentication;
@@ -15,6 +16,8 @@ import java.math.BigDecimal;
 import java.time.LocalDateTime;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Map;
+import java.util.stream.Collectors;
 
 /**
  * Servicio principal del módulo de Reportes Mensuales.
@@ -52,6 +55,7 @@ public class ReporteService {
     private final ReporteCategoriaRepository categoriaRepo;
     private final VistaControlSaldosRepository saldosRepo;
     private final UsuarioRepository usuarioRepo;
+    private final EquipoRepository equipoRepo;
     private final StorageService storageService;
 
     @SuppressFBWarnings(value = "EI_EXPOSE_REP2", justification = "Todos los parámetros son beans singleton gestionados por Spring; no es posible ni necesario hacer copias defensivas.")
@@ -60,12 +64,14 @@ public class ReporteService {
                           ReporteCategoriaRepository categoriaRepo,
                           VistaControlSaldosRepository saldosRepo,
                           UsuarioRepository usuarioRepo,
+                          EquipoRepository equipoRepo,
                           StorageService storageService) {
         this.reporteRepo   = reporteRepo;
         this.detalleRepo   = detalleRepo;
         this.categoriaRepo = categoriaRepo;
         this.saldosRepo    = saldosRepo;
         this.usuarioRepo   = usuarioRepo;
+        this.equipoRepo    = equipoRepo;
         this.storageService = storageService;
     }
 
@@ -145,7 +151,7 @@ public class ReporteService {
             detalleRepo.save(detalle);
         }
 
-        return construirResponse(reporte, validados.detalles());
+        return construirResponse(reporte, validados.detalles(), obtenerNombreEquipo(equipoId));
     }
 
     // ─────────────────────────────────────────────────────────────────────────
@@ -195,7 +201,7 @@ public class ReporteService {
         reporteRepo.save(reporte);
 
         List<ReporteDetalle> detalles = detalleRepo.findByReporteId(id);
-        return construirResponse(reporte, detalles);
+        return construirResponse(reporte, detalles, obtenerNombreEquipo(equipoId));
     }
 
     // ─────────────────────────────────────────────────────────────────────────
@@ -285,7 +291,7 @@ public class ReporteService {
         // Las observaciones se conservan para que el ERL sepa qué corregir
         reporteRepo.save(reporte);
 
-        return construirResponse(reporte, validados.detalles());
+        return construirResponse(reporte, validados.detalles(), obtenerNombreEquipo(equipoId));
     }
 
     // ─────────────────────────────────────────────────────────────────────────
@@ -318,8 +324,16 @@ public class ReporteService {
                     "Tipo de equipo no reconocido en el token: " + equipoTipo);
         };
 
+        List<Integer> equipoIds = reportes.stream()
+                .map(ReporteMensual::getEquipoId)
+                .distinct()
+                .toList();
+        Map<Integer, String> nombresEquipo = equipoRepo.findAllById(equipoIds).stream()
+                .collect(Collectors.toMap(Equipo::getId, Equipo::getNombre));
+
         return reportes.stream()
-                .map(r -> construirResponse(r, detalleRepo.findByReporteId(r.getId())))
+                .map(r -> construirResponse(r, detalleRepo.findByReporteId(r.getId()),
+                        nombresEquipo.get(r.getEquipoId())))
                 .toList();
     }
 
@@ -399,7 +413,7 @@ public class ReporteService {
         reporteRepo.save(reporte);
 
         List<ReporteDetalle> detalles = detalleRepo.findByReporteId(id);
-        return construirResponse(reporte, detalles);
+        return construirResponse(reporte, detalles, obtenerNombreEquipo(reporte.getEquipoId()));
     }
 
     // ─────────────────────────────────────────────────────────────────────────
@@ -575,8 +589,8 @@ public class ReporteService {
     private JwtAuthDetails obtenerDetails() {
         Authentication auth = SecurityContextHolder.getContext().getAuthentication();
         if (!(auth.getDetails() instanceof JwtAuthDetails details)) {
-            throw new IllegalStateException(
-                    "El token no contiene identidad jerárquica válida (equipoId/equipoTipo).");
+            throw new IdentidadJwtException(
+                    "El token no contiene identidad jerárquica válida (equipoId/equipoTipo). Vuelve a iniciar sesión.");
         }
         return details;
     }
@@ -604,11 +618,14 @@ public class ReporteService {
      * <p>Enriquece cada detalle con el nombre largo y la familia de la categoría,
      * y calcula el monto total como la suma de todos los rubros.</p>
      *
-     * @param reporte  entidad cabezote del reporte
-     * @param detalles lista de entidades de detalle asociadas
+     * @param reporte      entidad cabezote del reporte
+     * @param detalles     lista de entidades de detalle asociadas
+     * @param nombreEquipo nombre descriptivo del equipo dueño del reporte, o {@code null}
+     *                     si el equipo ya no existe
      * @return DTO completo listo para serializar en la respuesta HTTP
      */
-    private ReporteResponse construirResponse(ReporteMensual reporte, List<ReporteDetalle> detalles) {
+    private ReporteResponse construirResponse(ReporteMensual reporte, List<ReporteDetalle> detalles,
+                                              String nombreEquipo) {
         List<ReporteDetalleResponse> detalleResponses = detalles.stream()
                 .map(d -> {
                     ReporteCategoria cat = categoriaRepo.findById(d.getCategoriaCodigo()).orElse(null);
@@ -626,6 +643,7 @@ public class ReporteService {
         return new ReporteResponse(
                 reporte.getId(),
                 reporte.getEquipoId(),
+                nombreEquipo,
                 reporte.getTemporadaId(),
                 reporte.getMes(),
                 reporte.getAnio(),
@@ -639,5 +657,15 @@ public class ReporteService {
                 detalleResponses,
                 montoTotal
         );
+    }
+
+    /**
+     * Busca el nombre descriptivo de un equipo por su ID.
+     *
+     * @param equipoId ID del equipo
+     * @return el nombre del equipo, o {@code null} si no existe
+     */
+    private String obtenerNombreEquipo(Integer equipoId) {
+        return equipoRepo.findById(equipoId).map(Equipo::getNombre).orElse(null);
     }
 }
