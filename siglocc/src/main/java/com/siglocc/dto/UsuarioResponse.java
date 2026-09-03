@@ -12,6 +12,7 @@ package com.siglocc.dto;
  * @param email     correo electrónico del usuario
  * @param rol       nombre del rol asignado (ej: "ENL_RECURSOS")
  * @param equipo    nombre del equipo asignado (ej: "Atlántico")
+ * @param activo    {@code true} si el usuario puede iniciar sesión
  */
 public record UsuarioResponse(
         Integer id,
@@ -19,5 +20,6 @@ public record UsuarioResponse(
         String lastname,
         String email,
         String rol,
-        String equipo
+        String equipo,
+        boolean activo
 ) {}
