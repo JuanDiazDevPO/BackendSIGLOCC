@@ -1,5 +1,6 @@
 package com.siglocc.service;
 
+import com.siglocc.dto.AnticipoDetalleResponse;
 import com.siglocc.dto.AnticipoRequest;
 import com.siglocc.dto.AnticipoResponse;
 import com.siglocc.dto.SaldosEquipoResponse;
@@ -21,6 +22,7 @@ import org.springframework.transaction.support.TransactionSynchronizationManager
 
 import java.math.BigDecimal;
 import java.time.LocalDateTime;
+import java.util.List;
 import java.util.Map;
 import java.util.NoSuchElementException;
 
@@ -313,6 +315,57 @@ public class AnticipoService {
                         saldos.getSaldoEntrenamiento()
                 ),
                 mentoreo
+        );
+    }
+
+    /**
+     * Retorna todas las solicitudes de anticipo, de la más reciente a la más antigua.
+     *
+     * <p>Es la bandeja completa a nivel nacional — pensada para {@code ENL_RECURSOS},
+     * único rol que puede aprobar. No filtra por jerarquía como reportes o dashboard
+     * porque hoy no existe un paso de aprobación a nivel ERLE en este módulo.</p>
+     *
+     * @return lista completa de solicitudes con todos sus campos
+     */
+    public List<AnticipoDetalleResponse> listarSolicitudes() {
+        return solicitudRepo.findAllByOrderByFechaSolicitudDesc().stream()
+                .map(this::toDetalleResponse)
+                .toList();
+    }
+
+    /**
+     * Convierte una entidad {@link SolicitudAnticipo} en su DTO de detalle completo.
+     *
+     * @param s entidad persistida
+     * @return DTO listo para serializar en la respuesta HTTP
+     */
+    private AnticipoDetalleResponse toDetalleResponse(SolicitudAnticipo s) {
+        String equipoNombre = equipoRepository.findById(s.getEquipoId())
+                .map(Equipo::getNombre)
+                .orElse(null);
+
+        return new AnticipoDetalleResponse(
+                s.getId(),
+                s.getTitulo(),
+                s.getDescripcion(),
+                s.getMontoSolicitado(),
+                s.getTipoPresupuesto() != null ? s.getTipoPresupuesto().name() : null,
+                s.getEstado() != null ? s.getEstado().name() : null,
+                s.getMotivoRechazo(),
+                s.getCiudad(),
+                s.getCedula(),
+                s.getBanco(),
+                s.getTipoCuenta() != null ? s.getTipoCuenta().name() : null,
+                s.getNumeroCuenta(),
+                s.getNombreTitular(),
+                s.getCedulaTitular(),
+                s.getRutaPdf(),
+                s.getEquipoId(),
+                equipoNombre,
+                s.getTemporadaId(),
+                s.getUsuarioId(),
+                s.getFechaSolicitud(),
+                s.getFechaAprobacionFinal()
         );
     }
 
