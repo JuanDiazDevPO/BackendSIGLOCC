@@ -14,6 +14,7 @@ import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.util.Comparator;
 import java.util.List;
 import java.util.NoSuchElementException;
 
@@ -84,8 +85,33 @@ public class UsuarioService {
                 saved.getLastname(),
                 saved.getEmail(),
                 saved.getRol().getName(),
-                saved.getEquipo().getNombre()
+                saved.getEquipo().getNombre(),
+                saved.isActivo()
         );
+    }
+
+    /**
+     * Retorna todos los usuarios registrados en el sistema, activos e inactivos.
+     *
+     * <p>Pensado para una pantalla de administración de usuarios: permite ver
+     * quién está activo antes de decidir a quién inactivar o reactivar.</p>
+     *
+     * @return lista de usuarios ordenada por equipo y luego por nombre
+     */
+    public List<UsuarioResponse> listarUsuarios() {
+        return usuarioRepository.findAll().stream()
+                .sorted(Comparator.comparing((Usuario u) -> u.getEquipo().getNombre())
+                        .thenComparing(Usuario::getName))
+                .map(u -> new UsuarioResponse(
+                        u.getId(),
+                        u.getName(),
+                        u.getLastname(),
+                        u.getEmail(),
+                        u.getRol().getName(),
+                        u.getEquipo().getNombre(),
+                        u.isActivo()
+                ))
+                .toList();
     }
 
     /**

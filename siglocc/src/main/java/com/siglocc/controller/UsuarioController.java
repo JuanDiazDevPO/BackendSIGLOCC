@@ -19,9 +19,12 @@ import java.util.Map;
 /**
  * Controlador REST para la gestión de usuarios.
  *
- * <p>Expone tres endpoints, todos restringidos a {@code ENL_RECURSOS} y {@code ENL_LOGISTICA}:</p>
+ * <p>Expone varios endpoints, todos restringidos a {@code ENL_RECURSOS} y {@code ENL_LOGISTICA}:</p>
  * <ul>
+ *   <li>{@code GET  /api/usuarios}         – Listar todos los usuarios (activos e inactivos).</li>
  *   <li>{@code POST /api/usuarios}         – Registrar nuevo usuario.</li>
+ *   <li>{@code PATCH /api/usuarios/{id}/inactivar} – Inactivar usuario.</li>
+ *   <li>{@code PATCH /api/usuarios/{id}/activar}   – Reactivar usuario.</li>
  *   <li>{@code GET  /api/usuarios/roles}   – Listar roles disponibles.</li>
  *   <li>{@code GET  /api/usuarios/equipos} – Listar equipos disponibles.</li>
  * </ul>
@@ -36,6 +39,21 @@ public class UsuarioController {
 
     public UsuarioController(UsuarioService usuarioService) {
         this.usuarioService = usuarioService;
+    }
+
+    /**
+     * Retorna todos los usuarios registrados en el sistema, activos e inactivos.
+     *
+     * <p>Solo accesible para {@code ENL_RECURSOS} o {@code ENL_LOGISTICA}, igual
+     * que el resto de la gestión de usuarios.</p>
+     *
+     * @return HTTP 200 con la lista completa de usuarios
+     */
+    @Operation(summary = "Listar usuarios", description = "Devuelve todos los usuarios del sistema, activos e inactivos, ordenados por equipo.")
+    @GetMapping
+    @PreAuthorize("hasAnyRole('ENL_RECURSOS', 'ENL_LOGISTICA')")
+    public ResponseEntity<List<UsuarioResponse>> listar() {
+        return ResponseEntity.ok(usuarioService.listarUsuarios());
     }
 
     /**
