@@ -1,5 +1,6 @@
 package com.siglocc.controller;
 
+import com.siglocc.dto.AnticipoDetalleResponse;
 import com.siglocc.dto.AnticipoRequest;
 import com.siglocc.dto.AnticipoResponse;
 import com.siglocc.dto.SaldosEquipoResponse;
@@ -20,12 +21,14 @@ import org.springframework.web.bind.annotation.*;
 
 import java.io.IOException;
 import java.nio.file.Path;
+import java.util.List;
 
 /**
  * Controlador REST para el módulo de anticipos de presupuesto.
  *
- * <p>Expone cuatro endpoints:</p>
+ * <p>Expone cinco endpoints:</p>
  * <ul>
+ *   <li>{@code GET   /api/v1/anticipos}               – Listar todas las solicitudes (solo ENL_RECURSOS).</li>
  *   <li>{@code GET   /api/v1/anticipos/mis-saldos}   – Consultar saldos disponibles del equipo.</li>
  *   <li>{@code POST  /api/v1/anticipos}               – Crear solicitud de anticipo.</li>
  *   <li>{@code PATCH /api/v1/anticipos/{id}/aprobar}  – Aprobar solicitud (solo ENL_RECURSOS).</li>
@@ -48,6 +51,20 @@ public class AnticipoController {
                                SolicitudAnticipoRepository solicitudRepo) {
         this.anticipoService = anticipoService;
         this.solicitudRepo   = solicitudRepo;
+    }
+
+    /**
+     * Lista todas las solicitudes de anticipo, de la más reciente a la más antigua.
+     *
+     * <p>Es la bandeja de aprobación completa a nivel nacional. Solo accesible
+     * para {@code ENL_RECURSOS}, el único rol que puede aprobar solicitudes.</p>
+     */
+    @Operation(summary = "Listar solicitudes de anticipo",
+               description = "Bandeja completa a nivel nacional, más reciente primero. Solo ENL_RECURSOS.")
+    @GetMapping
+    @PreAuthorize("hasRole('ENL_RECURSOS')")
+    public ResponseEntity<List<AnticipoDetalleResponse>> listar() {
+        return ResponseEntity.ok(anticipoService.listarSolicitudes());
     }
 
     /**
