@@ -30,6 +30,7 @@ public class EntregaService {
     private final EntregaIglesiaRepository entregaRepo;
     private final DetalleEntregaIglesiaRepository detalleRepo;
     private final TipoItemRepository tipoItemRepo;
+    private final CategoriaCajaRepository categoriaCajaRepo;
     private final IglesiaRepository iglesiaRepo;
     private final FotoEntregaIglesiaRepository fotoEntregaRepo;
     private final FotoEntregaNinosRepository fotoNinosRepo;
@@ -41,6 +42,7 @@ public class EntregaService {
     public EntregaService(EntregaIglesiaRepository entregaRepo,
                           DetalleEntregaIglesiaRepository detalleRepo,
                           TipoItemRepository tipoItemRepo,
+                          CategoriaCajaRepository categoriaCajaRepo,
                           IglesiaRepository iglesiaRepo,
                           FotoEntregaIglesiaRepository fotoEntregaRepo,
                           FotoEntregaNinosRepository fotoNinosRepo,
@@ -49,6 +51,7 @@ public class EntregaService {
         this.entregaRepo    = entregaRepo;
         this.detalleRepo    = detalleRepo;
         this.tipoItemRepo   = tipoItemRepo;
+        this.categoriaCajaRepo = categoriaCajaRepo;
         this.iglesiaRepo    = iglesiaRepo;
         this.fotoEntregaRepo = fotoEntregaRepo;
         this.fotoNinosRepo  = fotoNinosRepo;
@@ -115,20 +118,29 @@ public class EntregaService {
         // Validar y preparar detalles
         List<DetalleEntregaIglesia> detalles = new ArrayList<>();
         for (EntregaDetalleRequest dr : request.detalles()) {
-            if (dr.tipoItemId() == null) {
-                throw new IllegalArgumentException("Cada detalle debe tener un tipoItemId.");
+            boolean tieneCategoria = dr.categoriaCajaId() != null;
+            boolean tieneItem      = dr.tipoItemId() != null;
+            if (tieneCategoria == tieneItem) {
+                throw new IllegalArgumentException(
+                        "Cada detalle debe tener exactamente uno de categoriaCajaId o tipoItemId, no ambos ni ninguno.");
             }
             if (dr.cantidadEntregada() == null || dr.cantidadEntregada() <= 0) {
                 throw new IllegalArgumentException(
-                        "La cantidad entregada para el ítem " + dr.tipoItemId()
-                        + " debe ser mayor que cero.");
+                        "La cantidad entregada debe ser mayor que cero.");
             }
-            tipoItemRepo.findById(dr.tipoItemId())
-                    .orElseThrow(() -> new IllegalArgumentException(
-                            "Tipo de ítem no encontrado con id: " + dr.tipoItemId()));
 
             DetalleEntregaIglesia detalle = new DetalleEntregaIglesia();
-            detalle.setTipoItemId(dr.tipoItemId());
+            if (tieneCategoria) {
+                categoriaCajaRepo.findById(dr.categoriaCajaId())
+                        .orElseThrow(() -> new IllegalArgumentException(
+                                "Categoría de caja no encontrada con id: " + dr.categoriaCajaId()));
+                detalle.setCategoriaCajaId(dr.categoriaCajaId());
+            } else {
+                tipoItemRepo.findById(dr.tipoItemId())
+                        .orElseThrow(() -> new IllegalArgumentException(
+                                "Tipo de ítem no encontrado con id: " + dr.tipoItemId()));
+                detalle.setTipoItemId(dr.tipoItemId());
+            }
             detalle.setCantidadEntregada(dr.cantidadEntregada());
             detalles.add(detalle);
         }
@@ -318,11 +330,22 @@ public class EntregaService {
     private EntregaResponse construirResponse(EntregaIglesia e, List<DetalleEntregaIglesia> detalles) {
         List<EntregaDetalleResponse> detalleResponses = detalles.stream()
                 .map(d -> {
+                    if (d.getCategoriaCajaId() != null) {
+                        CategoriaCaja cat = categoriaCajaRepo.findById(d.getCategoriaCajaId()).orElse(null);
+                        return new EntregaDetalleResponse(
+                                d.getCategoriaCajaId(),
+                                cat != null ? cat.getCodigo() : null,
+                                cat != null ? cat.getDescripcion() : null,
+                                null, null, null,
+                                d.getCantidadEntregada());
+                    }
                     TipoItem item = tipoItemRepo.findById(d.getTipoItemId()).orElse(null);
-                    String codigo = item != null ? item.getCodigo() : String.valueOf(d.getTipoItemId());
-                    String nombre = item != null ? item.getNombreCompleto() : "";
                     return new EntregaDetalleResponse(
-                            d.getTipoItemId(), codigo, nombre, d.getCantidadEntregada());
+                            null, null, null,
+                            d.getTipoItemId(),
+                            item != null ? item.getCodigo() : String.valueOf(d.getTipoItemId()),
+                            item != null ? item.getNombreCompleto() : "",
+                            d.getCantidadEntregada());
                 })
                 .toList();
 

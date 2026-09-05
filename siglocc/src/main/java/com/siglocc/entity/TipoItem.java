@@ -46,6 +46,14 @@ public class TipoItem {
     @Column(name = "aplica_ninos", nullable = false)
     private Boolean aplicaNinos;
 
+    /**
+     * Momento operativo en que se distribuye este ítem: 1 = Visión, 2 = Capacitación, 3 = Entrega.
+     * Columna ya existente en {@code tipos_item} (ver {@code logistica_schema.sql}); no estaba
+     * mapeada en esta entidad hasta ahora.
+     */
+    @Column(nullable = false)
+    private Integer momento;
+
     public Integer getId() { return id; }
     public void setId(Integer id) { this.id = id; }
 
@@ -57,4 +65,7 @@ public class TipoItem {
 
     public Boolean getAplicaNinos() { return aplicaNinos; }
     public void setAplicaNinos(Boolean aplicaNinos) { this.aplicaNinos = aplicaNinos; }
+
+    public Integer getMomento() { return momento; }
+    public void setMomento(Integer momento) { this.momento = momento; }
 }

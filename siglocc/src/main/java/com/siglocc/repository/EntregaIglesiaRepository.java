@@ -1,6 +1,7 @@
 package com.siglocc.repository;
 
 import com.siglocc.entity.EntregaIglesia;
+import com.siglocc.entity.EstadoEntrega;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
@@ -35,4 +36,43 @@ public interface EntregaIglesiaRepository extends JpaRepository<EntregaIglesia, 
     List<EntregaIglesia> findByErleClusterAndTemporada(
             @Param("erleId") Integer erleId,
             @Param("temporadaId") Integer temporadaId);
+
+    /** Cuenta las actas de entrega dentro del alcance visible. Usado para inferir el momento actual. */
+    long countByTemporadaIdAndEquipoIdIn(Integer temporadaId, List<Integer> equipoIds);
+
+    /**
+     * Cuenta las iglesias distintas con acta COMPLETADA o PARCIAL dentro del alcance visible.
+     * Alimenta {@code embudoIglesias.entregadas}.
+     */
+    long countDistinctIglesiaIdByTemporadaIdAndEstadoInAndEquipoIdIn(
+            Integer temporadaId, List<EstadoEntrega> estados, List<Integer> equipoIds);
+
+    /** Cuenta las actas sin firma adjunta (nula o vacía) dentro del alcance visible. */
+    @Query("""
+        SELECT COUNT(e) FROM EntregaIglesia e
+        WHERE e.temporadaId = :temporadaId
+          AND (e.firmaUrl IS NULL OR e.firmaUrl = '')
+          AND e.equipoId IN (:equipoIds)
+        """)
+    long countSinFirma(
+            @Param("temporadaId") Integer temporadaId,
+            @Param("equipoIds") List<Integer> equipoIds);
+
+    /**
+     * Cuenta las actas sin ninguna foto de entrega a niños (Momento C) dentro del alcance visible.
+     * {@code FotoEntregaNinos} se asocia por {@code iglesiaId + temporadaId}, no por
+     * {@code entregaId} — no existe esa columna en esa tabla.
+     */
+    @Query("""
+        SELECT COUNT(e) FROM EntregaIglesia e
+        WHERE e.temporadaId = :temporadaId
+          AND e.equipoId IN (:equipoIds)
+          AND NOT EXISTS (
+              SELECT 1 FROM FotoEntregaNinos f
+              WHERE f.iglesiaId = e.iglesiaId AND f.temporadaId = e.temporadaId
+          )
+        """)
+    long countSinFotosNinos(
+            @Param("temporadaId") Integer temporadaId,
+            @Param("equipoIds") List<Integer> equipoIds);
 }
