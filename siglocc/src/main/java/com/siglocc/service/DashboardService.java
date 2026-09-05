@@ -43,10 +43,15 @@ public class DashboardService {
      * necesitar {@code erleId}/{@code enlId} en el DTO: agrupa cada ERLE con sus
      * ERL subordinados usando {@code coalesce(erleId, equipoId)} como clave de
      * clúster, y dentro de un mismo clúster respeta ENL → ERLE → ERL.
+     *
+     * <p><strong>{@code nullsFirst} en {@code enlId}, no {@code nullsLast}:</strong>
+     * el equipo ENL es la raíz de la jerarquía y su {@code enl_id} siempre es
+     * {@code NULL} (no tiene padre) — con {@code nullsLast} el ENL terminaba
+     * al final de la lista en vez de primero.</p>
      */
     private static final Comparator<VistaDashboardFinanciero> ORDEN_JERARQUICO = Comparator
             .comparing((VistaDashboardFinanciero v) -> v.getEnlId(),
-                    Comparator.nullsLast(Comparator.naturalOrder()))
+                    Comparator.nullsFirst(Comparator.naturalOrder()))
             .thenComparing(v -> v.getErleId() != null ? v.getErleId() : v.getId().getEquipoId())
             .thenComparing(v -> ORDEN_TIPO.getOrDefault(v.getEquipoTipo(), Integer.MAX_VALUE))
             .thenComparing(VistaDashboardFinanciero::getEquipoNombre,
