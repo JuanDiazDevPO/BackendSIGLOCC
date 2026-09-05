@@ -61,4 +61,66 @@ public interface AsignacionDetalleRepository extends JpaRepository<AsignacionDet
             @Param("equipoId") Integer equipoId,
             @Param("temporadaId") Integer temporadaId,
             @Param("tipoItemId") Integer tipoItemId);
+
+    /**
+     * Suma total de cajas asignadas (corridas CONFIRMADAS) dentro del alcance visible.
+     * Alimenta {@code embudoCajas.asignadas} del dashboard logístico.
+     */
+    @Query("""
+        SELECT COALESCE(SUM(d.cantidadAsignada), 0)
+        FROM   AsignacionDetalle  d
+        JOIN   AsignacionCabecera c ON c.id = d.cabeceraId
+        WHERE  c.temporadaId = :temporadaId AND c.estado = 'CONFIRMADA'
+          AND  d.categoriaCajaId IS NOT NULL
+          AND  c.equipoId IN (:equipoIds)
+        """)
+    long sumCajasAsignadasConfirmadas(
+            @Param("temporadaId") Integer temporadaId,
+            @Param("equipoIds") List<Integer> equipoIds);
+
+    /**
+     * Cuenta las iglesias distintas con al menos una línea de caja CONFIRMADA y cantidad &gt; 0.
+     * Alimenta {@code embudoIglesias.conAsignacion}.
+     */
+    @Query("""
+        SELECT COUNT(DISTINCT d.iglesiaId)
+        FROM   AsignacionDetalle  d
+        JOIN   AsignacionCabecera c ON c.id = d.cabeceraId
+        WHERE  c.temporadaId = :temporadaId AND c.estado = 'CONFIRMADA'
+          AND  d.cantidadAsignada > 0
+          AND  c.equipoId IN (:equipoIds)
+        """)
+    long countIglesiasConAsignacionConfirmada(
+            @Param("temporadaId") Integer temporadaId,
+            @Param("equipoIds") List<Integer> equipoIds);
+
+    /**
+     * Suma de cajas asignadas CONFIRMADAS agrupada por categoría, dentro del alcance visible.
+     * Cada fila del resultado es {@code [categoriaCajaId (Integer), total (Long)]}.
+     */
+    @Query("""
+        SELECT d.categoriaCajaId, COALESCE(SUM(d.cantidadAsignada), 0)
+        FROM   AsignacionDetalle  d
+        JOIN   AsignacionCabecera c ON c.id = d.cabeceraId
+        WHERE  c.temporadaId = :temporadaId AND c.estado = 'CONFIRMADA'
+          AND  d.categoriaCajaId IS NOT NULL
+          AND  c.equipoId IN (:equipoIds)
+        GROUP BY d.categoriaCajaId
+        """)
+    List<Object[]> sumCajasAsignadasPorCategoria(
+            @Param("temporadaId") Integer temporadaId,
+            @Param("equipoIds") List<Integer> equipoIds);
+
+    /** Suma de cajas asignadas CONFIRMADAS de un solo equipo (avance por equipo). */
+    @Query("""
+        SELECT COALESCE(SUM(d.cantidadAsignada), 0)
+        FROM   AsignacionDetalle  d
+        JOIN   AsignacionCabecera c ON c.id = d.cabeceraId
+        WHERE  c.temporadaId = :temporadaId AND c.estado = 'CONFIRMADA'
+          AND  d.categoriaCajaId IS NOT NULL
+          AND  c.equipoId = :equipoId
+        """)
+    long sumCajasAsignadasConfirmadasPorEquipo(
+            @Param("temporadaId") Integer temporadaId,
+            @Param("equipoId") Integer equipoId);
 }

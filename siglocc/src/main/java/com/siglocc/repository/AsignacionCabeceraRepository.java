@@ -36,4 +36,8 @@ public interface AsignacionCabeceraRepository extends JpaRepository<AsignacionCa
     /** Comprueba si ya existe una corrida en un estado dado para el equipo y temporada. */
     boolean existsByEquipoIdAndTemporadaIdAndEstado(
             Integer equipoId, Integer temporadaId, EstadoAsignacion estado);
+
+    /** Cuenta las corridas en un estado dado dentro del alcance visible (dashboard logístico). */
+    long countByTemporadaIdAndEstadoAndEquipoIdIn(
+            Integer temporadaId, EstadoAsignacion estado, List<Integer> equipoIds);
 }

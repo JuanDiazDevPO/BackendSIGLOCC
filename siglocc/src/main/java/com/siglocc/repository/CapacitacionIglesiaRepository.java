@@ -46,4 +46,28 @@ public interface CapacitacionIglesiaRepository extends JpaRepository<Capacitacio
     List<CapacitacionIglesia> findByEquipoAndTemporada(
             @Param("equipoId") Integer equipoId,
             @Param("temporadaId") Integer temporadaId);
+
+    /**
+     * Cuenta las iglesias distintas con capacitación registrada dentro del alcance visible.
+     * Usado por el dashboard logístico ({@code embudoIglesias.capacitadas}) y para
+     * determinar si el momento actual ya llegó a Capacitación.
+     */
+    @Query("""
+        SELECT COUNT(DISTINCT c.iglesiaId) FROM CapacitacionIglesia c
+        JOIN Iglesia i ON i.id = c.iglesiaId
+        WHERE c.temporadaId = :temporadaId AND i.equipoId IN (:equipoIds)
+        """)
+    long countDistinctIglesiaByTemporadaAndEquipos(
+            @Param("temporadaId") Integer temporadaId,
+            @Param("equipoIds") List<Integer> equipoIds);
+
+    /** Cuenta las capacitaciones de las iglesias de un equipo específico (avance por equipo). */
+    @Query("""
+        SELECT COUNT(DISTINCT c.iglesiaId) FROM CapacitacionIglesia c
+        JOIN Iglesia i ON i.id = c.iglesiaId
+        WHERE c.temporadaId = :temporadaId AND i.equipoId = :equipoId
+        """)
+    long countDistinctIglesiaByTemporadaAndEquipo(
+            @Param("temporadaId") Integer temporadaId,
+            @Param("equipoId") Integer equipoId);
 }
