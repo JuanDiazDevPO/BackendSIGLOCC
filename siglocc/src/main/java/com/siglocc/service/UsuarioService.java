@@ -10,12 +10,14 @@ import com.siglocc.entity.Usuario;
 import com.siglocc.repository.EquipoRepository;
 import com.siglocc.repository.RolRepository;
 import com.siglocc.repository.UsuarioRepository;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.util.Comparator;
 import java.util.List;
+import java.util.Map;
 import java.util.NoSuchElementException;
 
 /**
@@ -24,6 +26,10 @@ import java.util.NoSuchElementException;
  * <p>Actualmente gestiona el registro de nuevos usuarios. Solo los roles
  * {@code ENL_RECURSOS} y {@code ENL_LOGISTICA} pueden crear usuarios;
  * esa restricción se aplica en el controlador con {@code @PreAuthorize}.</p>
+ *
+ * <p>Al registrar un usuario se le envía un correo de bienvenida con su
+ * usuario y contraseña temporal (plantilla {@code cuenta-creada}), mismo
+ * patrón que los demás correos transaccionales del sistema.</p>
  */
 @Service
 public class UsuarioService {
@@ -32,15 +38,22 @@ public class UsuarioService {
     private final RolRepository rolRepository;
     private final EquipoRepository equipoRepository;
     private final PasswordEncoder passwordEncoder;
+    private final EmailService emailService;
+
+    /** URL base del Front-end, para el botón "Ingresar a SIGLOCC" del correo de bienvenida. */
+    @Value("${app.frontend.url:http://localhost:4200}")
+    private String frontendUrl;
 
     public UsuarioService(UsuarioRepository usuarioRepository,
                           RolRepository rolRepository,
                           EquipoRepository equipoRepository,
-                          PasswordEncoder passwordEncoder) {
+                          PasswordEncoder passwordEncoder,
+                          EmailService emailService) {
         this.usuarioRepository = usuarioRepository;
         this.rolRepository = rolRepository;
         this.equipoRepository = equipoRepository;
         this.passwordEncoder = passwordEncoder;
+        this.emailService = emailService;
     }
 
     /**
@@ -78,6 +91,22 @@ public class UsuarioService {
         usuario.setEquipo(equipo);
 
         Usuario saved = usuarioRepository.save(usuario);
+
+        // Correo de bienvenida con usuario y contraseña temporal (en texto plano,
+        // tomada del request antes de hashearse — nunca se recupera del hash guardado).
+        emailService.enviarHtml(
+                saved.getEmail(),
+                "SIGLOCC - ¡Bienvenido/a a SIGLOCC!",
+                "cuenta-creada",
+                Map.of(
+                    "nombre", saved.getName(),
+                    "email", saved.getEmail(),
+                    "password", request.password(),
+                    "rol", saved.getRol().getName(),
+                    "equipo", saved.getEquipo().getNombre(),
+                    "enlace", frontendUrl
+                )
+        );
 
         return new UsuarioResponse(
                 saved.getId(),

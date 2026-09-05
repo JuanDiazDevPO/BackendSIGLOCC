@@ -56,7 +56,7 @@ public class RecuperacionPasswordService {
      * URL base del Front-end. Se usa para construir el enlace del correo.
      * Configurable en {@code application.properties} como {@code app.frontend.url}.
      */
-    @Value("${app.frontend.url:http://localhost:4200}")
+    @Value("${app.frontend.url:https://siglocc.org}")
     private String frontendUrl;
 
     @SuppressFBWarnings(value = "EI_EXPOSE_REP2", justification = "TokenRecuperacionRepository es un bean singleton gestionado por Spring; no es posible ni necesario hacer copia defensiva.")
