@@ -97,7 +97,7 @@ public class TemporadaService {
                         "Temporada no encontrada con id: " + id));
 
         temporadaRepo.findByEsActualTrue().ifPresent(actual -> {
-            if (!actual.getId().equals(id)) {
+            if (!id.equals(actual.getId())) {
                 actual.setEsActual(false);
                 temporadaRepo.save(actual);
             }

@@ -97,7 +97,9 @@ public class ReporteController {
 
     /**
      * Adjunta el archivo de soporte (PDF/ZIP) a un reporte en estado BORRADOR
-     * y lo avanza automáticamente a {@code PENDIENTE_ERLE}.
+     * y avanza el estado según el tipo de equipo dueño del reporte: un ERL pasa
+     * a {@code PENDIENTE_ERLE}, un ERLE pasa directo a {@code PENDIENTE_ENL}
+     * (sin autoaprobación), y un ENL queda {@code APROBADO} de inmediato.
      *
      * <p>El archivo se recibe como {@code multipart/form-data} con el campo
      * {@code archivo}. Se almacena con el nombre
@@ -105,10 +107,11 @@ public class ReporteController {
      *
      * @param id      ID del reporte al que se adjunta el soporte
      * @param archivo archivo PDF o ZIP de evidencia de gastos
-     * @return respuesta 200 con el reporte actualizado (nuevo estado PENDIENTE_ERLE)
+     * @return respuesta 200 con el reporte actualizado en su nuevo estado
      */
     @Operation(summary = "Subir soporte del reporte",
-               description = "Adjunta el archivo de evidencia y avanza el reporte a PENDIENTE_ERLE.")
+               description = "Adjunta el archivo de evidencia. ERL -> PENDIENTE_ERLE, " +
+                             "ERLE -> PENDIENTE_ENL directo, ENL -> APROBADO de inmediato.")
     @SecurityRequirement(name = "bearerAuth")
     @PutMapping(value = "/{id}/soporte", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
     public ResponseEntity<ReporteResponse> subirSoporte(

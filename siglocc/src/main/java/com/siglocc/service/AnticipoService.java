@@ -10,6 +10,7 @@ import com.siglocc.repository.SolicitudAnticipoRepository;
 import com.siglocc.repository.TemporadaRepository;
 import com.siglocc.repository.UsuarioRepository;
 import com.siglocc.repository.VistaControlSaldosRepository;
+import com.siglocc.security.IdentidadJwtException;
 import com.siglocc.security.JwtAuthDetails;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -278,12 +279,16 @@ public class AnticipoService {
      * {@code SecurityContextHolder}; nunca proviene del cliente.</p>
      *
      * @return DTO con presupuesto, ejecutado y disponible por rubro
+     * @throws IdentidadJwtException    si el token no contiene identidad jerárquica (→ 400)
      * @throws IllegalStateException    si no hay temporada activa (→ 409)
      * @throws NoSuchElementException   si el equipo no tiene presupuesto configurado (→ 404)
      */
     public SaldosEquipoResponse consultarMisSaldos() {
         Authentication auth = SecurityContextHolder.getContext().getAuthentication();
-        JwtAuthDetails details = (JwtAuthDetails) auth.getDetails();
+        if (!(auth.getDetails() instanceof JwtAuthDetails details)) {
+            throw new IdentidadJwtException(
+                    "El token no contiene identidad jerárquica válida. Vuelve a iniciar sesión.");
+        }
         Integer equipoId = details.equipoId();
 
         Temporada temporada = temporadaRepository.findByEsActualTrue()
