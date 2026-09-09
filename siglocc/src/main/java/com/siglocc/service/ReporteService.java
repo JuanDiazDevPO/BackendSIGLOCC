@@ -26,8 +26,8 @@ import java.util.stream.Collectors;
  * <ol>
  *   <li>{@link #crearReporte} – valida techo presupuestal, crea el cabezote y todos los
  *       rubros en una sola transacción.</li>
- *   <li>{@link #subirSoporte} – adjunta el archivo de evidencia y avanza el estado a
- *       {@code PENDIENTE_ERLE}.</li>
+ *   <li>{@link #subirSoporte} – adjunta el archivo de evidencia y avanza el estado
+ *       según el tipo de equipo dueño del reporte (ver {@link EstadoReporte}).</li>
  *   <li>{@link #listarReportes} – lista reportes filtrando por la jerarquía del usuario
  *       autenticado.</li>
  *   <li>{@link #cambiarEstado} – permite a ERLE y ENL aprobar o rechazar los reportes,
@@ -45,7 +45,10 @@ import java.util.stream.Collectors;
  *
  * <p><strong>Impacto financiero:</strong> Solo los reportes en estado
  * {@link EstadoReporte#APROBADO} alimentan el ejecutado en las vistas MySQL.
- * La transición a APROBADO la realiza únicamente el ENL.</p>
+ * Para reportes de equipos ERL y ERLE, la transición a APROBADO la realiza
+ * únicamente el ENL vía {@link #cambiarEstado}; para reportes del propio ENL,
+ * ocurre automáticamente en {@link #subirSoporte} al no haber nadie por
+ * encima que deba aprobarlos.</p>
  */
 @Service
 public class ReporteService {
@@ -160,7 +163,17 @@ public class ReporteService {
 
     /**
      * Adjunta el archivo de evidencia (PDF/ZIP) a un reporte en estado BORRADOR
-     * y lo avanza automáticamente a {@link EstadoReporte#PENDIENTE_ERLE}.
+     * y avanza el estado según el tipo de equipo dueño del reporte:
+     *
+     * <ul>
+     *   <li><strong>ERL:</strong> → {@link EstadoReporte#PENDIENTE_ERLE} (requiere
+     *       aprobación de su ERLE y luego del ENL).</li>
+     *   <li><strong>ERLE:</strong> → {@link EstadoReporte#PENDIENTE_ENL} directo
+     *       (se salta la autoaprobación; solo el ENL lo revisa).</li>
+     *   <li><strong>ENL:</strong> → {@link EstadoReporte#APROBADO} de inmediato
+     *       (no hay nadie por encima que deba aprobarlo; se registra
+     *       {@code aprobadorEnlId} con el propio usuario que subió el soporte).</li>
+     * </ul>
      *
      * <p>El equipo del usuario (del JWT) debe coincidir con el equipo del reporte
      * para evitar que un usuario suba soporte en nombre de otro equipo.</p>
@@ -168,13 +181,15 @@ public class ReporteService {
      * @param id      ID del reporte al que se adjunta el soporte
      * @param archivo archivo multipart enviado por el cliente
      * @return respuesta actualizada con el nombre del archivo y el nuevo estado
-     * @throws IllegalArgumentException si el reporte no existe
+     * @throws IllegalArgumentException si el reporte no existe, o el
+     *                                  {@code equipoTipo} del token no es reconocido
      * @throws IllegalStateException    si el usuario no tiene permisos o el estado no es BORRADOR
      */
     @Transactional
     public ReporteResponse subirSoporte(Integer id, MultipartFile archivo) {
         JwtAuthDetails details = obtenerDetails();
         Integer equipoId = details.equipoId();
+        String equipoTipo = details.equipoTipo();
 
         ReporteMensual reporte = reporteRepo.findById(id)
                 .orElseThrow(() -> new IllegalArgumentException(
@@ -195,9 +210,24 @@ public class ReporteService {
 
         String nombreArchivo = storageService.almacenarSoporte(
                 archivo, equipoId, reporte.getMes(), reporte.getAnio());
-
         reporte.setUrlSoporte(nombreArchivo);
-        reporte.setEstado(EstadoReporte.PENDIENTE_ERLE);
+
+        // El siguiente estado depende del tipo de equipo dueño del reporte:
+        // ERL requiere aprobación de su ERLE y luego del ENL; un ERLE no tiene
+        // sentido que se autoapruebe, así que salta directo a PENDIENTE_ENL;
+        // el ENL no tiene a nadie por encima que lo apruebe, así que su
+        // reporte queda aprobado en el mismo instante en que sube el soporte.
+        switch (equipoTipo) {
+            case "ERL" -> reporte.setEstado(EstadoReporte.PENDIENTE_ERLE);
+            case "ERLE" -> reporte.setEstado(EstadoReporte.PENDIENTE_ENL);
+            case "ENL" -> {
+                reporte.setEstado(EstadoReporte.APROBADO);
+                reporte.setFechaAprobacionFinal(LocalDateTime.now());
+                reporte.setAprobadorEnlId(resolverUsuarioId());
+            }
+            default -> throw new IllegalArgumentException(
+                    "Tipo de equipo no reconocido en el token: " + equipoTipo);
+        }
         reporteRepo.save(reporte);
 
         List<ReporteDetalle> detalles = detalleRepo.findByReporteId(id);

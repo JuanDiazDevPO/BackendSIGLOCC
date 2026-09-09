@@ -8,7 +8,8 @@ import java.time.LocalDateTime;
  *
  * <p>Mapea la tabla {@code reportes_mensuales}. Un reporte agrupa todos los rubros
  * gastados por un equipo durante un mes específico y controla el estado del flujo
- * de aprobación (BORRADOR → PENDIENTE_ERLE → PENDIENTE_ENL → APROBADO).</p>
+ * de aprobación, cuyo recorrido depende del tipo de equipo dueño del reporte
+ * (ver {@link EstadoReporte} para el detalle completo).</p>
  *
  * <p><strong>Restricción de unicidad:</strong> La combinación
  * {@code (equipo_id, temporada_id, mes, anio)} es única en la tabla,

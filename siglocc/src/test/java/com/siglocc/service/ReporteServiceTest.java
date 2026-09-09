@@ -28,6 +28,7 @@ import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.security.core.Authentication;
 import org.springframework.security.core.context.SecurityContextHolder;
+import org.springframework.web.multipart.MultipartFile;
 
 import java.math.BigDecimal;
 import java.util.List;
@@ -357,5 +358,104 @@ class ReporteServiceTest {
         assertThat(response.estado()).isEqualTo("APROBADO");
         assertThat(response.fechaAprobacionFinal()).isNotNull();
         assertThat(response.aprobadorEnlId()).isEqualTo(77);
+    }
+
+    // ─────────────────────────────────────────────────────────────────────
+    // subirSoporte — control de acceso y estado previo
+    // ─────────────────────────────────────────────────────────────────────
+
+    @Test
+    void subirSoporte_equipoDistintoAlDueno_lanzaIllegalStateException() {
+        autenticarComo(99, "ERL"); // no es el dueño del reporte (EQUIPO_ID = 8)
+        when(reporteRepo.findById(1)).thenReturn(Optional.of(reporteEnEstado(EstadoReporte.BORRADOR)));
+        MultipartFile archivo = mock(MultipartFile.class);
+
+        assertThatThrownBy(() -> service.subirSoporte(1, archivo))
+                .isInstanceOf(IllegalStateException.class)
+                .hasMessageContaining("propietario");
+    }
+
+    @Test
+    void subirSoporte_reporteNoEstaEnBorrador_lanzaIllegalStateException() {
+        autenticarComo(EQUIPO_ID, "ERL");
+        when(reporteRepo.findById(1)).thenReturn(Optional.of(reporteEnEstado(EstadoReporte.PENDIENTE_ERLE)));
+        MultipartFile archivo = mock(MultipartFile.class);
+
+        assertThatThrownBy(() -> service.subirSoporte(1, archivo))
+                .isInstanceOf(IllegalStateException.class)
+                .hasMessageContaining("BORRADOR");
+    }
+
+    // ─────────────────────────────────────────────────────────────────────
+    // subirSoporte — el siguiente estado depende del tipo de equipo dueño
+    // ─────────────────────────────────────────────────────────────────────
+
+    @Test
+    void subirSoporte_comoERL_avanzaAPendienteErle() {
+        autenticarComo(EQUIPO_ID, "ERL");
+        ReporteMensual reporte = reporteEnEstado(EstadoReporte.BORRADOR);
+        when(reporteRepo.findById(1)).thenReturn(Optional.of(reporte));
+        MultipartFile archivo = mock(MultipartFile.class);
+        when(storageService.almacenarSoporte(archivo, EQUIPO_ID, 3, 2026)).thenReturn("SOPORTE_EQ8_MES3_2026.pdf");
+
+        ReporteResponse response = service.subirSoporte(1, archivo);
+
+        assertThat(response.estado()).isEqualTo("PENDIENTE_ERLE");
+        assertThat(response.fechaAprobacionFinal()).isNull();
+        assertThat(response.aprobadorEnlId()).isNull();
+    }
+
+    @Test
+    void subirSoporte_comoERLE_saltaAutoaprobacionYVaDirectoAPendienteEnl() {
+        autenticarComo(EQUIPO_ID, "ERLE");
+        ReporteMensual reporte = reporteEnEstado(EstadoReporte.BORRADOR);
+        when(reporteRepo.findById(1)).thenReturn(Optional.of(reporte));
+        MultipartFile archivo = mock(MultipartFile.class);
+        when(storageService.almacenarSoporte(archivo, EQUIPO_ID, 3, 2026)).thenReturn("SOPORTE_EQ8_MES3_2026.pdf");
+
+        ReporteResponse response = service.subirSoporte(1, archivo);
+
+        assertThat(response.estado())
+                .as("un ERLE no se autoaprueba: debe ir directo a PENDIENTE_ENL, nunca pasar por PENDIENTE_ERLE")
+                .isEqualTo("PENDIENTE_ENL");
+        assertThat(response.aprobadorEnlId()).isNull();
+    }
+
+    @Test
+    void subirSoporte_comoENL_quedaAprobadoDeInmediatoConAprobadorYFecha() {
+        autenticarComo(EQUIPO_ID, "ENL");
+        ReporteMensual reporte = reporteEnEstado(EstadoReporte.BORRADOR);
+        when(reporteRepo.findById(1)).thenReturn(Optional.of(reporte));
+        MultipartFile archivo = mock(MultipartFile.class);
+        when(storageService.almacenarSoporte(archivo, EQUIPO_ID, 3, 2026)).thenReturn("SOPORTE_EQ8_MES3_2026.pdf");
+
+        Authentication auth = SecurityContextHolder.getContext().getAuthentication();
+        when(auth.getName()).thenReturn("enl@siglocc.org");
+        Usuario usuarioEnl = new Usuario();
+        usuarioEnl.setId(5);
+        when(usuarioRepo.findByEmail("enl@siglocc.org")).thenReturn(Optional.of(usuarioEnl));
+
+        ReporteResponse response = service.subirSoporte(1, archivo);
+
+        assertThat(response.estado())
+                .as("el ENL no tiene a nadie por encima que lo apruebe: queda APROBADO al subir el soporte")
+                .isEqualTo("APROBADO");
+        assertThat(response.fechaAprobacionFinal()).isNotNull();
+        assertThat(response.aprobadorEnlId())
+                .as("se autoconfirma con el propio usuario ENL que subió el soporte")
+                .isEqualTo(5);
+    }
+
+    @Test
+    void subirSoporte_tipoEquipoNoReconocido_lanzaIllegalArgumentException() {
+        autenticarComo(EQUIPO_ID, "SUPERVISOR");
+        ReporteMensual reporte = reporteEnEstado(EstadoReporte.BORRADOR);
+        when(reporteRepo.findById(1)).thenReturn(Optional.of(reporte));
+        MultipartFile archivo = mock(MultipartFile.class);
+        when(storageService.almacenarSoporte(archivo, EQUIPO_ID, 3, 2026)).thenReturn("SOPORTE_EQ8_MES3_2026.pdf");
+
+        assertThatThrownBy(() -> service.subirSoporte(1, archivo))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessageContaining("SUPERVISOR");
     }
 }
