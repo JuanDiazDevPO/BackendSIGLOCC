@@ -1,24 +1,44 @@
 -- ============================================================================
--- SIGLOCC — Vistas del motor financiero (presupuesto, saldos, dashboard)
+-- SIGLOCC — Vistas del motor financiero y de logística
 -- ============================================================================
--- Estas 3 vistas nunca estuvieron versionadas en el repo — se crearon a mano
+-- Estas 5 vistas nunca estuvieron versionadas en el repo — se crearon a mano
 -- directo en la base de datos en algún momento del desarrollo. Este archivo
 -- es el resultado de correr SHOW CREATE VIEW sobre cada una en la BD de dev
 -- y reformatear el resultado (una sola línea, todo entre backticks) a algo
--- legible. La LÓGICA es una copia exacta — ninguna expresión fue modificada.
+-- legible.
 --
 -- ORDEN DE DEPENDENCIA (crear en este orden, cada una lee de la anterior):
---   1. vista_presupuesto_final     — calcula el presupuesto en COP a partir
---                                    de los inputs operativos crudos.
---   2. vista_control_saldos_enl    — le resta lo ya ejecutado (reportes
---                                    APROBADOS) para dar el saldo disponible.
---   3. vista_dashboard_financiero  — le agrega el contexto jerárquico
---                                    (equipo, tipo, erle_id, enl_id).
+--   1. vista_presupuesto_final       — calcula el presupuesto en COP a partir
+--                                      de los inputs operativos crudos.
+--   2. vista_control_saldos_enl      — le resta lo ya ejecutado (reportes
+--                                      APROBADOS) para dar el saldo disponible.
+--   3. vista_dashboard_financiero    — le agrega el contexto jerárquico
+--                                      (equipo, tipo, erle_id, enl_id).
+--   4. vista_metas_calculadas        — independiente; cajas totales/LGA a
+--                                      partir de la meta de contenedores.
+--   5. vista_inventario_disponible   — independiente; recibido vs. asignado
+--                                      por categoría de caja / tipo de ítem.
 --
--- DEFINER: las 3 se crearon con DEFINER=`admin_siglocc`@`%`. Si este script
--- se corre contra otra base de datos donde ese usuario no existe, hay que
--- quitar la cláusula DEFINER (MySQL la reemplaza por el usuario que ejecuta
--- el CREATE) o cambiarla por el usuario admin correspondiente.
+-- Ninguna de las 5 tiene hoy una entidad JPA ni un @Query nativo en el
+-- código Java (ver com.siglocc.entity.Vista* para las 2 que sí se consumen
+-- desde la app: VistaDashboardFinanciero y VistaControlSaldos). Las otras 3
+-- existen solo para consulta manual (Workbench) o para una funcionalidad
+-- futura, pero igual se versionan aquí para que no vuelvan a perderse.
+--
+-- BUG HISTÓRICO CORREGIDO (2026-09-12): la tabla metas_equipo tiene dos
+-- columnas — cant_contenedores (huérfana, nunca actualizada por la app,
+-- siempre en su default 0) y meta_contenedores (la que el código actual
+-- realmente escribe). Las definiciones originales de vista_presupuesto_final
+-- y vista_metas_calculadas leían cant_contenedores, así que total_admin_cm
+-- y cant_cajas_total/cant_cajas_lga daban 0 para cualquier equipo con datos
+-- reales cargados. Las definiciones de abajo ya usan meta_contenedores.
+--
+-- DEFINER: las 3 originales se crearon con DEFINER=`admin_siglocc`@`%`. Si
+-- este script se corre contra otra base de datos donde ese usuario no
+-- existe (p. ej. una RDS nueva con solo el usuario admin), hay que quitar
+-- la cláusula DEFINER (MySQL la reemplaza por el usuario que ejecuta el
+-- CREATE) o cambiarla por el usuario admin correspondiente. Las 2 vistas
+-- nuevas se documentan aquí ya sin esa cláusula, por portabilidad.
 --
 -- CREATE OR REPLACE: seguro de re-correr, no duplica ni rompe nada si la
 -- vista ya existe con esta misma definición.
@@ -34,7 +54,7 @@
 --
 -- Fórmulas (todas multiplican por tasa_cambio al final para pasar a COP):
 --   personas_por_pv    = entrenadores_pv + (promedio_cm_cont × 2)
---   total_admin_cm     = cant_contenedores(meta) × promedio_cm_cont × usd_admin_cm
+--   total_admin_cm     = meta_contenedores × promedio_cm_cont × usd_admin_cm
 --   total_refrigerio_pv = num_pv × personas_por_pv × usd_refrigerio_pv
 --   total_transporte_pv = num_pv × personas_por_pv × usd_transporte_pv
 --   total_transporte_cap = num_cap_occ × num_entrenadores_cap × usd_transporte_cap
@@ -104,7 +124,7 @@ FROM (
         `p`.`usd_refrigerio_cap`         AS `usd_refrigerio_cap`,
         (`pd`.`entrenadores_pv` + (`pd`.`promedio_cm_cont` * 2))
             AS `personas_por_pv`,
-        ((`m`.`cant_contenedores` * `pd`.`promedio_cm_cont`) * `p`.`usd_admin_cm` * `p`.`tasa_cambio`)
+        ((`m`.`meta_contenedores` * `pd`.`promedio_cm_cont`) * `p`.`usd_admin_cm` * `p`.`tasa_cambio`)
             AS `total_admin_cm`,
         (((`pd`.`equipos_bajo_mentoreo` * `p`.`visitas_mentoreo`) * `p`.`personas_por_visita`) * `p`.`usd_transporte_mentoreo` * `p`.`tasa_cambio`)
             AS `mentoreo_transporte`,
@@ -216,3 +236,106 @@ SELECT
         AS `gran_total_saldo`
 FROM (`vista_control_saldos_enl` `v`
     JOIN `equipos` `e` ON (`v`.`equipo_id` = `e`.`id`));
+
+
+-- ────────────────────────────────────────────────────────────────────────
+-- 4. VISTA_METAS_CALCULADAS
+-- ────────────────────────────────────────────────────────────────────────
+-- Traduce la meta de contenedores de un equipo a cantidad de cajas totales
+-- y cajas LGA ("Literatura, Ganancia de almas..."), usando el porcentaje y
+-- la conversión cajas-por-contenedor de parametros_nconnect. No la consume
+-- ningún endpoint hoy; existe para consulta manual.
+--
+--   cant_cajas_total = meta_contenedores × cajas_por_contenedor
+--   cant_cajas_lga   = cant_cajas_total × (porcentaje_lga / 100)
+-- ────────────────────────────────────────────────────────────────────────
+CREATE OR REPLACE VIEW `vista_metas_calculadas` AS
+SELECT
+    `m`.`id`                       AS `meta_id`,
+    `e`.`nombre`                   AS `equipo`,
+    `t`.`nombre`                   AS `temporada`,
+    `m`.`meta_contenedores`        AS `cant_contenedores`,
+    `p`.`cajas_por_contenedor`     AS `cajas_por_contenedor`,
+    `p`.`porcentaje_lga`           AS `porcentaje_lga`,
+    (`m`.`meta_contenedores` * `p`.`cajas_por_contenedor`)
+        AS `cant_cajas_total`,
+    ((`m`.`meta_contenedores` * `p`.`cajas_por_contenedor`) * (`p`.`porcentaje_lga` / 100))
+        AS `cant_cajas_lga`
+FROM ((`metas_equipo` `m`
+    JOIN `parametros_nconnect` `p` ON (`m`.`temporada_id` = `p`.`temporada_id`))
+    JOIN `equipos` `e` ON (`m`.`equipo_id` = `e`.`id`))
+    JOIN `temporadas` `t` ON (`m`.`temporada_id` = `t`.`id`);
+
+
+-- ────────────────────────────────────────────────────────────────────────
+-- 5. VISTA_INVENTARIO_DISPONIBLE
+-- ────────────────────────────────────────────────────────────────────────
+-- Por equipo/temporada, compara lo recibido en bodega (recepcion_contenedores
+-- + detalle_recepcion_contenedor) contra lo ya asignado en asignaciones
+-- CONFIRMADAS (asignacion_cabecera + asignacion_detalle), para dar el
+-- disponible real. Es un UNION de dos mitades porque un mismo detalle de
+-- recepción/asignación usa categoria_caja_id O tipo_item_id, nunca ambos a
+-- la vez (mismo patrón "exactamente uno" que ya usa EntregaService).
+-- No la consume ningún endpoint hoy; existe para consulta manual o como
+-- base para una futura pantalla de inventario.
+-- ────────────────────────────────────────────────────────────────────────
+CREATE OR REPLACE VIEW `vista_inventario_disponible` AS
+SELECT
+    `rc`.`equipo_id`      AS `equipo_id`,
+    `rc`.`temporada_id`   AS `temporada_id`,
+    `d`.`categoria_caja_id` AS `categoria_caja_id`,
+    NULL                  AS `tipo_item_id`,
+    SUM(`d`.`cantidad`)   AS `total_recibido`,
+    COALESCE((
+        SELECT SUM(`ad`.`cantidad_asignada`)
+        FROM (`asignacion_detalle` `ad`
+            JOIN `asignacion_cabecera` `ac` ON (`ac`.`id` = `ad`.`cabecera_id`))
+        WHERE `ac`.`equipo_id` = `rc`.`equipo_id`
+          AND `ac`.`temporada_id` = `rc`.`temporada_id`
+          AND `ad`.`categoria_caja_id` = `d`.`categoria_caja_id`
+          AND `ac`.`estado` = 'CONFIRMADA'
+    ), 0) AS `total_asignado`,
+    (SUM(`d`.`cantidad`) - COALESCE((
+        SELECT SUM(`ad`.`cantidad_asignada`)
+        FROM (`asignacion_detalle` `ad`
+            JOIN `asignacion_cabecera` `ac` ON (`ac`.`id` = `ad`.`cabecera_id`))
+        WHERE `ac`.`equipo_id` = `rc`.`equipo_id`
+          AND `ac`.`temporada_id` = `rc`.`temporada_id`
+          AND `ad`.`categoria_caja_id` = `d`.`categoria_caja_id`
+          AND `ac`.`estado` = 'CONFIRMADA'
+    ), 0)) AS `disponible`
+FROM (`recepcion_contenedores` `rc`
+    JOIN `detalle_recepcion_contenedor` `d` ON (`d`.`recepcion_id` = `rc`.`id`))
+WHERE `d`.`categoria_caja_id` IS NOT NULL
+GROUP BY `rc`.`equipo_id`, `rc`.`temporada_id`, `d`.`categoria_caja_id`
+
+UNION ALL
+
+SELECT
+    `rc`.`equipo_id`      AS `equipo_id`,
+    `rc`.`temporada_id`   AS `temporada_id`,
+    NULL                  AS `categoria_caja_id`,
+    `d`.`tipo_item_id`    AS `tipo_item_id`,
+    SUM(`d`.`cantidad`)   AS `total_recibido`,
+    COALESCE((
+        SELECT SUM(`ad`.`cantidad_asignada`)
+        FROM (`asignacion_detalle` `ad`
+            JOIN `asignacion_cabecera` `ac` ON (`ac`.`id` = `ad`.`cabecera_id`))
+        WHERE `ac`.`equipo_id` = `rc`.`equipo_id`
+          AND `ac`.`temporada_id` = `rc`.`temporada_id`
+          AND `ad`.`tipo_item_id` = `d`.`tipo_item_id`
+          AND `ac`.`estado` = 'CONFIRMADA'
+    ), 0) AS `total_asignado`,
+    (SUM(`d`.`cantidad`) - COALESCE((
+        SELECT SUM(`ad`.`cantidad_asignada`)
+        FROM (`asignacion_detalle` `ad`
+            JOIN `asignacion_cabecera` `ac` ON (`ac`.`id` = `ad`.`cabecera_id`))
+        WHERE `ac`.`equipo_id` = `rc`.`equipo_id`
+          AND `ac`.`temporada_id` = `rc`.`temporada_id`
+          AND `ad`.`tipo_item_id` = `d`.`tipo_item_id`
+          AND `ac`.`estado` = 'CONFIRMADA'
+    ), 0)) AS `disponible`
+FROM (`recepcion_contenedores` `rc`
+    JOIN `detalle_recepcion_contenedor` `d` ON (`d`.`recepcion_id` = `rc`.`id`))
+WHERE `d`.`tipo_item_id` IS NOT NULL
+GROUP BY `rc`.`equipo_id`, `rc`.`temporada_id`, `d`.`tipo_item_id`;
