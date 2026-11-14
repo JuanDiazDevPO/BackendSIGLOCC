@@ -3,6 +3,7 @@ package com.siglocc.controller;
 import com.siglocc.dto.AnticipoDetalleResponse;
 import com.siglocc.dto.AnticipoRequest;
 import com.siglocc.dto.AnticipoResponse;
+import com.siglocc.dto.CambiarEstadoRequest;
 import com.siglocc.dto.SaldosEquipoResponse;
 import com.siglocc.repository.SolicitudAnticipoRepository;
 import com.siglocc.service.AnticipoService;
@@ -28,11 +29,13 @@ import java.util.List;
  *
  * <p>Expone cinco endpoints:</p>
  * <ul>
- *   <li>{@code GET   /api/v1/anticipos}               – Listar todas las solicitudes (solo ENL_RECURSOS).</li>
- *   <li>{@code GET   /api/v1/anticipos/mis-saldos}   – Consultar saldos disponibles del equipo.</li>
- *   <li>{@code POST  /api/v1/anticipos}               – Crear solicitud de anticipo.</li>
- *   <li>{@code PATCH /api/v1/anticipos/{id}/aprobar}  – Aprobar solicitud (solo ENL_RECURSOS).</li>
- *   <li>{@code GET   /api/v1/anticipos/{id}/pdf}      – Descargar el PDF formal de la solicitud.</li>
+ *   <li>{@code GET   /api/v1/anticipos}             – Listar solicitudes visibles según jerarquía
+ *       (ENL_RECURSOS ve todo, ERLE_RECURSOS ve su clúster), con filtro opcional por temporada.</li>
+ *   <li>{@code GET   /api/v1/anticipos/mis-saldos}  – Consultar saldos disponibles del equipo.</li>
+ *   <li>{@code POST  /api/v1/anticipos}             – Crear solicitud de anticipo.</li>
+ *   <li>{@code PATCH /api/v1/anticipos/{id}/estado} – Aprobar o rechazar un paso del flujo
+ *       (ERLE_RECURSOS o ENL_RECURSOS, según el estado actual de la solicitud).</li>
+ *   <li>{@code GET   /api/v1/anticipos/{id}/pdf}    – Descargar el PDF formal de la solicitud.</li>
  * </ul>
  */
 @RestController
@@ -54,17 +57,20 @@ public class AnticipoController {
     }
 
     /**
-     * Lista todas las solicitudes de anticipo, de la más reciente a la más antigua.
+     * Lista las solicitudes de anticipo visibles para el usuario autenticado,
+     * de la más reciente a la más antigua, con filtrado jerárquico automático.
      *
-     * <p>Es la bandeja de aprobación completa a nivel nacional. Solo accesible
-     * para {@code ENL_RECURSOS}, el único rol que puede aprobar solicitudes.</p>
+     * <p>{@code ENL_RECURSOS} ve la bandeja completa a nivel nacional;
+     * {@code ERLE_RECURSOS} ve únicamente su propio equipo y los ERL de su clúster.</p>
      */
     @Operation(summary = "Listar solicitudes de anticipo",
-               description = "Bandeja completa a nivel nacional, más reciente primero. Solo ENL_RECURSOS.")
+               description = "Bandeja jerárquica: ENL_RECURSOS ve todo, ERLE_RECURSOS ve su clúster. " +
+                             "Más reciente primero. Admite filtro opcional ?temporadaId=.")
     @GetMapping
-    @PreAuthorize("hasRole('ENL_RECURSOS')")
-    public ResponseEntity<List<AnticipoDetalleResponse>> listar() {
-        return ResponseEntity.ok(anticipoService.listarSolicitudes());
+    @PreAuthorize("hasAnyRole('ENL_RECURSOS', 'ERLE_RECURSOS')")
+    public ResponseEntity<List<AnticipoDetalleResponse>> listar(
+            @RequestParam(required = false) Integer temporadaId) {
+        return ResponseEntity.ok(anticipoService.listarSolicitudes(temporadaId));
     }
 
     /**
@@ -85,8 +91,10 @@ public class AnticipoController {
      * El sistema valida el saldo disponible automáticamente y genera el PDF formal.
      */
     @Operation(summary = "Crear solicitud de anticipo",
-               description = "Valida saldo, guarda la solicitud y genera el PDF formal. " +
-                             "Devuelve 201 si queda PENDIENTE o 400 si es rechazada por saldo insuficiente.")
+               description = "Valida saldo, guarda la solicitud y genera el PDF formal. El estado inicial " +
+                             "depende del tipo de equipo: ERL → PENDIENTE_ERLE, ERLE → PENDIENTE_ENL, " +
+                             "ENL → APROBADO (autoaprobado). Devuelve 201 en esos casos, o 400 con estado " +
+                             "RECHAZADO si el monto supera el saldo disponible.")
     @PostMapping
     public ResponseEntity<AnticipoResponse> crearSolicitud(@RequestBody AnticipoRequest request) {
         AnticipoResponse response = anticipoService.crearSolicitud(request);
@@ -97,15 +105,24 @@ public class AnticipoController {
     }
 
     /**
-     * Aprueba una solicitud de anticipo en estado PENDIENTE.
-     * Solo accesible para el rol {@code ENL_RECURSOS}.
+     * Aprueba o rechaza un paso del flujo de aprobación de una solicitud.
+     *
+     * <p>Transiciones permitidas según el tipo de equipo del revisor:</p>
+     * <ul>
+     *   <li><strong>ERLE_RECURSOS:</strong> {@code PENDIENTE_ERLE → PENDIENTE_ENL} (aprueba)
+     *       o {@code → RECHAZADO} (rechaza). Solo sobre solicitudes de su propio clúster.</li>
+     *   <li><strong>ENL_RECURSOS:</strong> {@code PENDIENTE_ENL → APROBADO} (aprueba)
+     *       o {@code → RECHAZADO} (rechaza).</li>
+     * </ul>
      */
-    @Operation(summary = "Aprobar solicitud de anticipo",
-               description = "Solo ENL_RECURSOS puede aprobar. Notifica al solicitante por correo.")
-    @PatchMapping("/{id}/aprobar")
-    @PreAuthorize("hasRole('ENL_RECURSOS')")
-    public ResponseEntity<AnticipoResponse> aprobar(@PathVariable Integer id) {
-        return ResponseEntity.ok(anticipoService.aprobarSolicitud(id));
+    @Operation(summary = "Aprobar o rechazar solicitud de anticipo",
+               description = "ERLE_RECURSOS aprueba/rechaza el primer paso; ENL_RECURSOS el paso final. " +
+                             "Notifica por correo al solicitante y, si corresponde, al siguiente aprobador.")
+    @PatchMapping("/{id}/estado")
+    @PreAuthorize("hasAnyRole('ERLE_RECURSOS', 'ENL_RECURSOS')")
+    public ResponseEntity<AnticipoResponse> cambiarEstado(@PathVariable Integer id,
+                                                           @RequestBody CambiarEstadoRequest request) {
+        return ResponseEntity.ok(anticipoService.cambiarEstado(id, request));
     }
 
     /**
