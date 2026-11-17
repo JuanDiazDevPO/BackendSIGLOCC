@@ -33,4 +33,15 @@ public interface UsuarioRepository extends JpaRepository<Usuario, Integer> {
      * @return un {@link Optional} con el usuario encontrado, vacío si ninguno tiene ese rol
      */
     Optional<Usuario> findFirstByRol_Name(String rolName);
+
+    /**
+     * Busca el primer usuario de un equipo específico que tenga el rol indicado.
+     * Se usa para encontrar al coordinador ERLE_RECURSOS del clúster al que
+     * pertenece un equipo ERL, al notificarle una nueva solicitud de anticipo.
+     *
+     * @param equipoId ID del equipo
+     * @param rolName  nombre del rol (ej: "ERLE_RECURSOS")
+     * @return un {@link Optional} con el usuario encontrado, vacío si ninguno coincide
+     */
+    Optional<Usuario> findFirstByEquipo_IdAndRol_Name(Integer equipoId, String rolName);
 }

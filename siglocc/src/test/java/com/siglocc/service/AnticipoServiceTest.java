@@ -2,12 +2,14 @@ package com.siglocc.service;
 
 import com.siglocc.dto.AnticipoRequest;
 import com.siglocc.dto.AnticipoResponse;
+import com.siglocc.dto.CambiarEstadoRequest;
 import com.siglocc.dto.SaldosEquipoResponse;
 import com.siglocc.entity.Equipo;
 import com.siglocc.entity.EstadoSolicitud;
 import com.siglocc.entity.Rol;
 import com.siglocc.entity.SolicitudAnticipo;
 import com.siglocc.entity.Temporada;
+import com.siglocc.entity.TipoEquipo;
 import com.siglocc.entity.TipoPresupuesto;
 import com.siglocc.entity.Usuario;
 import com.siglocc.entity.VistaControlSaldos;
@@ -44,7 +46,7 @@ import static org.mockito.Mockito.when;
  * Pruebas unitarias de {@link AnticipoService}.
  *
  * <p><strong>Nota técnica:</strong> {@code crearSolicitud} y
- * {@code aprobarSolicitud} registran callbacks de correo con
+ * {@code cambiarEstado} registran callbacks de correo con
  * {@code TransactionSynchronizationManager.registerSynchronization(...)},
  * que lanza {@code IllegalStateException} si no hay sincronización de
  * transacción activa. En un test unitario puro (sin Spring real, sin
@@ -86,21 +88,30 @@ class AnticipoServiceTest {
 
     private void autenticarComoEmail(String email) {
         Authentication auth = mock(Authentication.class);
-        when(auth.getName()).thenReturn(email);
+        lenient().when(auth.getName()).thenReturn(email);
         SecurityContextHolder.getContext().setAuthentication(auth);
     }
 
     private void autenticarComoEquipo(Integer equipoId, String equipoTipo) {
         Authentication auth = mock(Authentication.class);
-        when(auth.getDetails()).thenReturn(new JwtAuthDetails(equipoId, equipoTipo));
+        lenient().when(auth.getDetails()).thenReturn(new JwtAuthDetails(equipoId, equipoTipo));
         SecurityContextHolder.getContext().setAuthentication(auth);
     }
 
-    private Usuario usuarioCompleto(String email) {
+    /** Autentica simultáneamente por email (para resolverUsuarioId) y por equipo/tipo (para JwtAuthDetails). */
+    private void autenticarComoEmailYEquipo(String email, Integer equipoId, String equipoTipo) {
+        Authentication auth = mock(Authentication.class);
+        lenient().when(auth.getName()).thenReturn(email);
+        lenient().when(auth.getDetails()).thenReturn(new JwtAuthDetails(equipoId, equipoTipo));
+        SecurityContextHolder.getContext().setAuthentication(auth);
+    }
+
+    private Usuario usuarioCompleto(String email, TipoEquipo tipoEquipo) {
         Rol rol = new Rol();
         rol.setName("ERL_LIDER");
         Equipo equipo = new Equipo();
         equipo.setNombre("ERL Bogotá Centro");
+        equipo.setTipo(tipoEquipo);
 
         Usuario u = new Usuario();
         u.setId(5);
@@ -151,7 +162,7 @@ class AnticipoServiceTest {
     void crearSolicitud_sinTemporadaActiva_lanzaIllegalStateException() {
         autenticarComoEmail("laura@siglocc.org");
         when(usuarioRepository.findByEmail("laura@siglocc.org"))
-                .thenReturn(Optional.of(usuarioCompleto("laura@siglocc.org")));
+                .thenReturn(Optional.of(usuarioCompleto("laura@siglocc.org", TipoEquipo.ERL)));
         when(temporadaRepository.findByEsActualTrue()).thenReturn(Optional.empty());
 
         assertThatThrownBy(() -> service.crearSolicitud(requestPara(TipoPresupuesto.ENTRENAMIENTO, BigDecimal.TEN)))
@@ -161,7 +172,7 @@ class AnticipoServiceTest {
 
     @Test
     void crearSolicitud_sinPresupuestoConfigurado_lanzaIllegalArgumentException() {
-        Usuario usuario = usuarioCompleto("laura@siglocc.org");
+        Usuario usuario = usuarioCompleto("laura@siglocc.org", TipoEquipo.ERL);
         autenticarComoEmail("laura@siglocc.org");
         when(usuarioRepository.findByEmail("laura@siglocc.org")).thenReturn(Optional.of(usuario));
         Temporada temporada = temporadaActiva();
@@ -174,12 +185,12 @@ class AnticipoServiceTest {
     }
 
     // ─────────────────────────────────────────────────────────────────────
-    // crearSolicitud — rechazo automático vs. pendiente, por bucket correcto
+    // crearSolicitud — rechazo automático vs. siguiente estado, por bucket correcto
     // ─────────────────────────────────────────────────────────────────────
 
     @Test
     void crearSolicitud_excedeSaldoEntrenamiento_seRechazaAutomaticamente() {
-        Usuario usuario = usuarioCompleto("laura@siglocc.org");
+        Usuario usuario = usuarioCompleto("laura@siglocc.org", TipoEquipo.ERL);
         autenticarComoEmail("laura@siglocc.org");
         when(usuarioRepository.findByEmail("laura@siglocc.org")).thenReturn(Optional.of(usuario));
         Temporada temporada = temporadaActiva();
@@ -195,7 +206,7 @@ class AnticipoServiceTest {
 
     @Test
     void crearSolicitud_excedeSaldoMentoreo_seRechazaAutomaticamente() {
-        Usuario usuario = usuarioCompleto("laura@siglocc.org");
+        Usuario usuario = usuarioCompleto("laura@siglocc.org", TipoEquipo.ERL);
         autenticarComoEmail("laura@siglocc.org");
         when(usuarioRepository.findByEmail("laura@siglocc.org")).thenReturn(Optional.of(usuario));
         Temporada temporada = temporadaActiva();
@@ -212,24 +223,25 @@ class AnticipoServiceTest {
     }
 
     @Test
-    void crearSolicitud_dentroDelSaldoEntrenamiento_quedaPendiente() {
-        Usuario usuario = usuarioCompleto("laura@siglocc.org");
+    void crearSolicitud_equipoErl_quedaPendienteErle() {
+        Usuario usuario = usuarioCompleto("laura@siglocc.org", TipoEquipo.ERL);
         autenticarComoEmail("laura@siglocc.org");
         when(usuarioRepository.findByEmail("laura@siglocc.org")).thenReturn(Optional.of(usuario));
         Temporada temporada = temporadaActiva();
         when(temporadaRepository.findByEsActualTrue()).thenReturn(Optional.of(temporada));
         VistaControlSaldos saldos = saldosCon(new BigDecimal("500000"), BigDecimal.ZERO);
         when(saldosRepo.findById(any())).thenReturn(Optional.of(saldos));
+        lenient().when(usuarioRepository.findFirstByEquipo_IdAndRol_Name(any(), any())).thenReturn(Optional.empty());
 
         AnticipoResponse response = service.crearSolicitud(
                 requestPara(TipoPresupuesto.ENTRENAMIENTO, new BigDecimal("200000")));
 
-        assertThat(response.estado()).isEqualTo("PENDIENTE");
+        assertThat(response.estado()).isEqualTo("PENDIENTE_ERLE");
     }
 
     @Test
-    void crearSolicitud_dentroDelSaldoMentoreo_quedaPendiente() {
-        Usuario usuario = usuarioCompleto("laura@siglocc.org");
+    void crearSolicitud_equipoErle_saltaDirectoAPendienteEnl() {
+        Usuario usuario = usuarioCompleto("laura@siglocc.org", TipoEquipo.ERLE);
         autenticarComoEmail("laura@siglocc.org");
         when(usuarioRepository.findByEmail("laura@siglocc.org")).thenReturn(Optional.of(usuario));
         Temporada temporada = temporadaActiva();
@@ -241,54 +253,173 @@ class AnticipoServiceTest {
         AnticipoResponse response = service.crearSolicitud(
                 requestPara(TipoPresupuesto.MENTOREO, new BigDecimal("150000")));
 
-        assertThat(response.estado()).isEqualTo("PENDIENTE");
+        assertThat(response.estado()).isEqualTo("PENDIENTE_ENL");
+    }
+
+    @Test
+    void crearSolicitud_equipoEnl_quedaAutoaprobada() {
+        Usuario usuario = usuarioCompleto("lider@siglocc.org", TipoEquipo.ENL);
+        autenticarComoEmail("lider@siglocc.org");
+        when(usuarioRepository.findByEmail("lider@siglocc.org")).thenReturn(Optional.of(usuario));
+        Temporada temporada = temporadaActiva();
+        when(temporadaRepository.findByEsActualTrue()).thenReturn(Optional.of(temporada));
+        VistaControlSaldos saldos = saldosCon(new BigDecimal("500000"), BigDecimal.ZERO);
+        when(saldosRepo.findById(any())).thenReturn(Optional.of(saldos));
+
+        AnticipoResponse response = service.crearSolicitud(
+                requestPara(TipoPresupuesto.ENTRENAMIENTO, new BigDecimal("200000")));
+
+        assertThat(response.estado()).isEqualTo("APROBADO");
     }
 
     // ─────────────────────────────────────────────────────────────────────
-    // aprobarSolicitud
+    // cambiarEstado — identidad y validación de transición
     // ─────────────────────────────────────────────────────────────────────
 
     @Test
-    void aprobarSolicitud_noEncontrada_lanzaIllegalArgumentException() {
+    void cambiarEstado_sinIdentidadJwt_lanzaIdentidadJwtException() {
+        Authentication auth = mock(Authentication.class);
+        lenient().when(auth.getDetails()).thenReturn(null);
+        SecurityContextHolder.getContext().setAuthentication(auth);
+
+        assertThatThrownBy(() -> service.cambiarEstado(1, new CambiarEstadoRequest("APROBADO", null)))
+                .isInstanceOf(IdentidadJwtException.class);
+    }
+
+    @Test
+    void cambiarEstado_solicitudNoEncontrada_lanzaIllegalArgumentException() {
+        autenticarComoEmailYEquipo("enl@siglocc.org", 1, "ENL");
         when(solicitudRepo.findById(99)).thenReturn(Optional.empty());
 
-        assertThatThrownBy(() -> service.aprobarSolicitud(99))
+        assertThatThrownBy(() -> service.cambiarEstado(99, new CambiarEstadoRequest("APROBADO", null)))
                 .isInstanceOf(IllegalArgumentException.class);
     }
 
     @Test
-    void aprobarSolicitud_yaAprobada_lanzaIllegalStateException() {
+    void cambiarEstado_estadoDestinoInvalido_lanzaIllegalArgumentException() {
+        autenticarComoEmailYEquipo("enl@siglocc.org", 1, "ENL");
         SolicitudAnticipo solicitud = new SolicitudAnticipo();
-        solicitud.setEstado(EstadoSolicitud.APROBADO);
+        solicitud.setEstado(EstadoSolicitud.PENDIENTE_ENL);
         when(solicitudRepo.findById(1)).thenReturn(Optional.of(solicitud));
 
-        assertThatThrownBy(() -> service.aprobarSolicitud(1))
+        assertThatThrownBy(() -> service.cambiarEstado(1, new CambiarEstadoRequest("NO_EXISTE", null)))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessageContaining("Estado no válido");
+    }
+
+    @Test
+    void cambiarEstado_erlNoPuedeCambiarEstado_lanzaIllegalStateException() {
+        autenticarComoEmailYEquipo("erl@siglocc.org", 8, "ERL");
+        SolicitudAnticipo solicitud = new SolicitudAnticipo();
+        solicitud.setEstado(EstadoSolicitud.PENDIENTE_ERLE);
+        when(solicitudRepo.findById(1)).thenReturn(Optional.of(solicitud));
+
+        assertThatThrownBy(() -> service.cambiarEstado(1, new CambiarEstadoRequest("PENDIENTE_ENL", null)))
                 .isInstanceOf(IllegalStateException.class)
-                .hasMessageContaining("PENDIENTE");
+                .hasMessageContaining("no tiene permisos");
     }
 
     @Test
-    void aprobarSolicitud_rechazada_lanzaIllegalStateException() {
+    void cambiarEstado_erleFueraDeSuCluster_lanzaIllegalStateException() {
+        autenticarComoEmailYEquipo("erle@siglocc.org", 2, "ERLE");
         SolicitudAnticipo solicitud = new SolicitudAnticipo();
-        solicitud.setEstado(EstadoSolicitud.RECHAZADO);
+        solicitud.setEstado(EstadoSolicitud.PENDIENTE_ERLE);
+        solicitud.setEquipoId(8);
         when(solicitudRepo.findById(1)).thenReturn(Optional.of(solicitud));
 
-        assertThatThrownBy(() -> service.aprobarSolicitud(1))
-                .isInstanceOf(IllegalStateException.class);
+        Equipo equipoSolicitante = new Equipo();
+        equipoSolicitante.setTipo(TipoEquipo.ERL);
+        // erleId real del equipo es 999, distinto del ERLE autenticado (2)
+        setErleIdViaReflexion(equipoSolicitante, 999);
+        when(equipoRepository.findById(8)).thenReturn(Optional.of(equipoSolicitante));
+
+        assertThatThrownBy(() -> service.cambiarEstado(1, new CambiarEstadoRequest("PENDIENTE_ENL", null)))
+                .isInstanceOf(IllegalStateException.class)
+                .hasMessageContaining("no pertenece a su clúster");
     }
 
     @Test
-    void aprobarSolicitud_pendiente_seApruebaYRegistraFecha() {
+    void cambiarEstado_erleApruebaSuPropioCluster_pasaAPendienteEnl() {
+        autenticarComoEmailYEquipo("erle@siglocc.org", 2, "ERLE");
+        when(usuarioRepository.findByEmail("erle@siglocc.org")).thenReturn(Optional.empty());
+
         SolicitudAnticipo solicitud = new SolicitudAnticipo();
-        solicitud.setEstado(EstadoSolicitud.PENDIENTE);
+        solicitud.setEstado(EstadoSolicitud.PENDIENTE_ERLE);
+        solicitud.setEquipoId(8);
+        solicitud.setUsuarioId(5);
+        when(solicitudRepo.findById(1)).thenReturn(Optional.of(solicitud));
+
+        Equipo equipoSolicitante = new Equipo();
+        equipoSolicitante.setTipo(TipoEquipo.ERL);
+        setErleIdViaReflexion(equipoSolicitante, 2);
+        when(equipoRepository.findById(8)).thenReturn(Optional.of(equipoSolicitante));
+        lenient().when(usuarioRepository.findFirstByRol_Name("ENL_RECURSOS")).thenReturn(Optional.empty());
+        lenient().when(usuarioRepository.findById(5)).thenReturn(Optional.empty());
+
+        AnticipoResponse response = service.cambiarEstado(1, new CambiarEstadoRequest("PENDIENTE_ENL", null));
+
+        assertThat(response.estado()).isEqualTo("PENDIENTE_ENL");
+        assertThat(solicitud.getAprobadorErleId()).isNull(); // usuario no encontrado por email en este test
+        assertThat(solicitud.getFechaAprobacionErle()).isNotNull();
+    }
+
+    @Test
+    void cambiarEstado_rechazoSinObservaciones_lanzaIllegalArgumentException() {
+        autenticarComoEmailYEquipo("enl@siglocc.org", 1, "ENL");
+        SolicitudAnticipo solicitud = new SolicitudAnticipo();
+        solicitud.setEstado(EstadoSolicitud.PENDIENTE_ENL);
+        when(solicitudRepo.findById(1)).thenReturn(Optional.of(solicitud));
+
+        assertThatThrownBy(() -> service.cambiarEstado(1, new CambiarEstadoRequest("RECHAZADO", "  ")))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessageContaining("observaciones");
+    }
+
+    @Test
+    void cambiarEstado_enlRechazaConObservaciones_quedaRechazada() {
+        autenticarComoEmailYEquipo("enl@siglocc.org", 1, "ENL");
+        when(usuarioRepository.findByEmail("enl@siglocc.org")).thenReturn(Optional.empty());
+
+        SolicitudAnticipo solicitud = new SolicitudAnticipo();
+        solicitud.setEstado(EstadoSolicitud.PENDIENTE_ENL);
         solicitud.setUsuarioId(5);
         when(solicitudRepo.findById(1)).thenReturn(Optional.of(solicitud));
         lenient().when(usuarioRepository.findById(5)).thenReturn(Optional.empty());
 
-        AnticipoResponse response = service.aprobarSolicitud(1);
+        AnticipoResponse response = service.cambiarEstado(
+                1, new CambiarEstadoRequest("RECHAZADO", "Soporte bancario ilegible"));
+
+        assertThat(response.estado()).isEqualTo("RECHAZADO");
+        assertThat(solicitud.getMotivoRechazo()).isEqualTo("Soporte bancario ilegible");
+        assertThat(solicitud.getFechaRechazo()).isNotNull();
+    }
+
+    @Test
+    void cambiarEstado_enlAprueba_registraFechaYAprobador() {
+        autenticarComoEmailYEquipo("enl@siglocc.org", 1, "ENL");
+        when(usuarioRepository.findByEmail("enl@siglocc.org")).thenReturn(Optional.empty());
+
+        SolicitudAnticipo solicitud = new SolicitudAnticipo();
+        solicitud.setEstado(EstadoSolicitud.PENDIENTE_ENL);
+        solicitud.setUsuarioId(5);
+        when(solicitudRepo.findById(1)).thenReturn(Optional.of(solicitud));
+        lenient().when(usuarioRepository.findById(5)).thenReturn(Optional.empty());
+
+        AnticipoResponse response = service.cambiarEstado(1, new CambiarEstadoRequest("APROBADO", null));
 
         assertThat(response.estado()).isEqualTo("APROBADO");
         assertThat(solicitud.getFechaAprobacionFinal()).isNotNull();
+    }
+
+    /** Asigna erleId a un Equipo saltando el insertable=false/updatable=false de JPA, solo para tests. */
+    private void setErleIdViaReflexion(Equipo equipo, Integer erleId) {
+        try {
+            var campo = Equipo.class.getDeclaredField("erleId");
+            campo.setAccessible(true);
+            campo.set(equipo, erleId);
+        } catch (ReflectiveOperationException e) {
+            throw new RuntimeException(e);
+        }
     }
 
     // ─────────────────────────────────────────────────────────────────────

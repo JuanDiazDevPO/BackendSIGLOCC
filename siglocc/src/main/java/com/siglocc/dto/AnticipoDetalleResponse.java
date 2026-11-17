@@ -17,8 +17,9 @@ import java.time.LocalDateTime;
  * @param descripcion           descripción detallada del gasto
  * @param montoSolicitado       monto en COP
  * @param tipoPresupuesto       {@code "ENTRENAMIENTO"} o {@code "MENTOREO"}
- * @param estado                {@code "PENDIENTE"}, {@code "APROBADO"} o {@code "RECHAZADO"}
- * @param motivoRechazo         razón del rechazo automático, o {@code null} si no aplica
+ * @param estado                {@code "PENDIENTE_ERLE"}, {@code "PENDIENTE_ENL"}, {@code "APROBADO"} o {@code "RECHAZADO"}
+ * @param motivoRechazo         razón del rechazo (automático por saldo, o manual con las observaciones
+ *                              del ERLE/ENL), o {@code null} si no aplica
  * @param ciudad                ciudad del solicitante
  * @param cedula                cédula del solicitante
  * @param banco                 banco destino del giro
@@ -32,7 +33,12 @@ import java.time.LocalDateTime;
  * @param temporadaId           ID de la temporada
  * @param usuarioId             ID del usuario que creó la solicitud
  * @param fechaSolicitud        fecha y hora de creación
- * @param fechaAprobacionFinal  fecha y hora de aprobación, o {@code null} si no está aprobada
+ * @param aprobadorErleId       ID del usuario ERLE que dio el primer visto bueno, o {@code null}
+ * @param fechaAprobacionErle   fecha y hora de la aprobación del ERLE, o {@code null}
+ * @param aprobadorEnlId        ID del usuario ENL que aprobó/rechazó el paso final, o {@code null}
+ * @param fechaAprobacionFinal  fecha y hora de aprobación final, o {@code null} si no está aprobada
+ * @param rechazadoPorId        ID del usuario que rechazó manualmente, o {@code null} si no aplica
+ * @param fechaRechazo          fecha y hora del rechazo (automático o manual), o {@code null}
  */
 public record AnticipoDetalleResponse(
         Integer id,
@@ -55,5 +61,10 @@ public record AnticipoDetalleResponse(
         Integer temporadaId,
         Integer usuarioId,
         LocalDateTime fechaSolicitud,
-        LocalDateTime fechaAprobacionFinal
+        Integer aprobadorErleId,
+        LocalDateTime fechaAprobacionErle,
+        Integer aprobadorEnlId,
+        LocalDateTime fechaAprobacionFinal,
+        Integer rechazadoPorId,
+        LocalDateTime fechaRechazo
 ) {}

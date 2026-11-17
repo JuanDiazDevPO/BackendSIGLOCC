@@ -61,12 +61,13 @@ public class SolicitudAnticipo {
      */
     @Enumerated(EnumType.STRING)
     @Column(nullable = false)
-    private EstadoSolicitud estado = EstadoSolicitud.PENDIENTE;
+    private EstadoSolicitud estado = EstadoSolicitud.PENDIENTE_ERLE;
 
     /**
      * Razón por la cual la solicitud fue rechazada.
      * Si el rechazo es automático por saldo insuficiente, el sistema
-     * rellena este campo con un mensaje estándar.
+     * rellena este campo con un mensaje estándar; si es manual, contiene
+     * las observaciones del ERLE o ENL que rechazó.
      */
     @Column(name = "motivo_rechazo", columnDefinition = "TEXT")
     private String motivoRechazo;
@@ -132,12 +133,45 @@ public class SolicitudAnticipo {
     private LocalDateTime fechaSolicitud = LocalDateTime.now();
 
     /**
-     * Fecha y hora en que el coordinador aprobó la solicitud.
-     * Es {@code null} mientras la solicitud esté en estado {@code PENDIENTE}
-     * o {@code RECHAZADO}.
+     * Fecha y hora en que el ENL dio la aprobación final a la solicitud
+     * (o en que quedó autoaprobada, si la solicitó el propio equipo ENL).
+     * Es {@code null} mientras la solicitud no esté en estado {@code APROBADO}.
      */
     @Column(name = "fecha_aprobacion_final")
     private LocalDateTime fechaAprobacionFinal;
+
+    /**
+     * ID del usuario ERLE que dio el primer visto bueno a la solicitud.
+     * Se registra cuando el estado transiciona de {@code PENDIENTE_ERLE}
+     * a {@code PENDIENTE_ENL}. Es {@code null} hasta ese momento, y también
+     * cuando la solicitud la hace directamente un equipo ERLE o ENL.
+     */
+    @Column(name = "aprobador_erle_id")
+    private Integer aprobadorErleId;
+
+    /** Fecha y hora en que el ERLE aprobó el primer paso. Es {@code null} hasta ese momento. */
+    @Column(name = "fecha_aprobacion_erle")
+    private LocalDateTime fechaAprobacionErle;
+
+    /**
+     * ID del usuario ENL que cerró el proceso de aprobación (aprobando o
+     * rechazando), o que generó la solicitud si el propio equipo ENL la
+     * autoaprobó. Es {@code null} hasta que el ENL actúa sobre la solicitud.
+     */
+    @Column(name = "aprobador_enl_id")
+    private Integer aprobadorEnlId;
+
+    /**
+     * ID del usuario (ERLE o ENL) que rechazó manualmente la solicitud.
+     * Es {@code null} si la solicitud no ha sido rechazada, o si el rechazo
+     * fue automático por saldo insuficiente.
+     */
+    @Column(name = "rechazado_por_id")
+    private Integer rechazadoPorId;
+
+    /** Fecha y hora del rechazo, automático o manual. Es {@code null} si no aplica. */
+    @Column(name = "fecha_rechazo")
+    private LocalDateTime fechaRechazo;
 
     public Integer getId() { return id; }
     public void setId(Integer id) { this.id = id; }
@@ -198,4 +232,19 @@ public class SolicitudAnticipo {
 
     public LocalDateTime getFechaAprobacionFinal() { return fechaAprobacionFinal; }
     public void setFechaAprobacionFinal(LocalDateTime fechaAprobacionFinal) { this.fechaAprobacionFinal = fechaAprobacionFinal; }
+
+    public Integer getAprobadorErleId() { return aprobadorErleId; }
+    public void setAprobadorErleId(Integer aprobadorErleId) { this.aprobadorErleId = aprobadorErleId; }
+
+    public LocalDateTime getFechaAprobacionErle() { return fechaAprobacionErle; }
+    public void setFechaAprobacionErle(LocalDateTime fechaAprobacionErle) { this.fechaAprobacionErle = fechaAprobacionErle; }
+
+    public Integer getAprobadorEnlId() { return aprobadorEnlId; }
+    public void setAprobadorEnlId(Integer aprobadorEnlId) { this.aprobadorEnlId = aprobadorEnlId; }
+
+    public Integer getRechazadoPorId() { return rechazadoPorId; }
+    public void setRechazadoPorId(Integer rechazadoPorId) { this.rechazadoPorId = rechazadoPorId; }
+
+    public LocalDateTime getFechaRechazo() { return fechaRechazo; }
+    public void setFechaRechazo(LocalDateTime fechaRechazo) { this.fechaRechazo = fechaRechazo; }
 }

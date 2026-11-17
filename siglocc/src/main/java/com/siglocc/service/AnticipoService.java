@@ -3,6 +3,7 @@ package com.siglocc.service;
 import com.siglocc.dto.AnticipoDetalleResponse;
 import com.siglocc.dto.AnticipoRequest;
 import com.siglocc.dto.AnticipoResponse;
+import com.siglocc.dto.CambiarEstadoRequest;
 import com.siglocc.dto.SaldosEquipoResponse;
 import com.siglocc.entity.*;
 import com.siglocc.repository.EquipoRepository;
@@ -30,12 +31,21 @@ import java.util.NoSuchElementException;
 /**
  * Servicio que contiene la lógica de negocio del módulo de anticipos.
  *
- * <p>Implementa dos operaciones principales:</p>
+ * <p>Implementa el ciclo de vida completo de una solicitud:</p>
  * <ul>
- *   <li>{@link #crearSolicitud} – valida saldo, persiste la solicitud,
- *       genera el PDF formal y notifica por correo</li>
- *   <li>{@link #aprobarSolicitud} – cambia el estado a APROBADO y notifica al solicitante</li>
+ *   <li>{@link #crearSolicitud} – valida saldo, persiste la solicitud con el estado
+ *       inicial que corresponda según el tipo de equipo, genera el PDF formal y notifica
+ *       por correo al siguiente aprobador</li>
+ *   <li>{@link #cambiarEstado} – permite a ERLE_RECURSOS y ENL_RECURSOS aprobar o rechazar
+ *       cada paso del flujo, registrando quién firmó (ver {@link EstadoSolicitud})</li>
+ *   <li>{@link #listarSolicitudes} – lista solicitudes filtrando por la jerarquía del
+ *       usuario autenticado, igual que {@code ReporteService.listarReportes}</li>
  * </ul>
+ *
+ * <p><strong>Flujo de aprobación (mismo patrón que {@code ReporteService}):</strong>
+ * un equipo ERL pasa primero por su ERLE y luego por el ENL; un equipo ERLE salta
+ * directo al ENL; una solicitud del propio equipo ENL queda autoaprobada de inmediato
+ * porque no hay nadie por encima que deba revisarla.</p>
  *
  * <p><strong>Patrón de envío de correos:</strong> Los correos se registran como
  * callbacks {@code afterCommit} usando {@link TransactionSynchronizationManager}.
@@ -135,6 +145,7 @@ public class AnticipoService {
         if (request.montoSolicitado().compareTo(saldoDisponible) > 0) {
             solicitud.setEstado(EstadoSolicitud.RECHAZADO);
             solicitud.setMotivoRechazo("Sistema: Monto excede el saldo disponible");
+            solicitud.setFechaRechazo(LocalDateTime.now());
             solicitudRepo.save(solicitud);
 
             String rutaPdf = generarYAlmacenarPdf(solicitud, solicitante);
@@ -167,22 +178,64 @@ public class AnticipoService {
                     mensaje, rutaPdf);
         }
 
-        // Paso 5B: saldo suficiente → guardar como PENDIENTE
-        solicitud.setEstado(EstadoSolicitud.PENDIENTE);
+        // Paso 5B: saldo suficiente → el siguiente estado depende del tipo de equipo
+        // solicitante. ERL necesita el visto bueno de su ERLE y luego del ENL; un
+        // ERLE salta directo a PENDIENTE_ENL; el ENL no tiene a nadie por encima,
+        // así que su propia solicitud queda aprobada de inmediato.
+        TipoEquipo tipoEquipo = solicitante.getEquipo().getTipo();
+        switch (tipoEquipo) {
+            case ERL -> solicitud.setEstado(EstadoSolicitud.PENDIENTE_ERLE);
+            case ERLE -> solicitud.setEstado(EstadoSolicitud.PENDIENTE_ENL);
+            case ENL -> {
+                solicitud.setEstado(EstadoSolicitud.APROBADO);
+                solicitud.setFechaAprobacionFinal(LocalDateTime.now());
+                solicitud.setAprobadorEnlId(solicitante.getId());
+            }
+        }
         solicitudRepo.save(solicitud);
 
         String rutaPdf = generarYAlmacenarPdf(solicitud, solicitante);
 
-        String emailSolicitante  = solicitante.getEmail();
-        String nombreSolicitante = solicitante.getName();
+        String emailSolicitante    = solicitante.getEmail();
+        String nombreSolicitante   = solicitante.getName();
         String apellidoSolicitante = solicitante.getLastname();
-        String tituloSolicitud   = request.titulo();
-        BigDecimal monto         = request.montoSolicitado();
-        String tipo              = request.tipoPresupuesto().name();
-        String emailAprobador    = usuarioRepository.findFirstByRol_Name("ENL_RECURSOS")
-                .map(Usuario::getEmail).orElse(null);
-        String nombreAprobador   = usuarioRepository.findFirstByRol_Name("ENL_RECURSOS")
-                .map(Usuario::getName).orElse(null);
+        String tituloSolicitud     = request.titulo();
+        BigDecimal monto           = request.montoSolicitado();
+        String tipo                = request.tipoPresupuesto().name();
+        LocalDateTime fechaAprobacion = solicitud.getFechaAprobacionFinal();
+
+        if (tipoEquipo == TipoEquipo.ENL) {
+            // Autoaprobada: se notifica directamente al solicitante, sin aprobador pendiente.
+            TransactionSynchronizationManager.registerSynchronization(new TransactionSynchronization() {
+                @Override
+                public void afterCommit() {
+                    emailService.enviarHtml(
+                            emailSolicitante,
+                            "SIGLOCC - Solicitud aprobada: " + tituloSolicitud,
+                            "solicitud-aprobada",
+                            Map.of(
+                                "nombreSolicitante", nombreSolicitante,
+                                "tituloSolicitud", tituloSolicitud,
+                                "monto", monto,
+                                "fechaAprobacion", fechaAprobacion
+                            )
+                    );
+                }
+            });
+
+            return new AnticipoResponse(solicitud.getId(), EstadoSolicitud.APROBADO.name(),
+                    "Solicitud aprobada automáticamente (equipo ENL).", rutaPdf);
+        }
+
+        // ERL notifica a su ERLE; ERLE notifica directo al ENL.
+        Usuario aprobador = tipoEquipo == TipoEquipo.ERL
+                ? resolverCoordinadorErle(solicitante.getEquipo().getErleId())
+                : usuarioRepository.findFirstByRol_Name("ENL_RECURSOS").orElse(null);
+        String emailAprobador  = aprobador != null ? aprobador.getEmail() : null;
+        String nombreAprobador = aprobador != null ? aprobador.getName() : null;
+        String mensaje = tipoEquipo == TipoEquipo.ERL
+                ? "Solicitud enviada correctamente y en espera de aprobación del ERLE."
+                : "Solicitud enviada correctamente y en espera de aprobación del ENL.";
 
         TransactionSynchronizationManager.registerSynchronization(new TransactionSynchronization() {
             @Override
@@ -216,59 +269,232 @@ public class AnticipoService {
             }
         });
 
-        return new AnticipoResponse(
-                solicitud.getId(),
-                EstadoSolicitud.PENDIENTE.name(),
-                "Solicitud enviada correctamente y en espera de aprobación del ENL.",
-                rutaPdf
-        );
+        return new AnticipoResponse(solicitud.getId(), solicitud.getEstado().name(), mensaje, rutaPdf);
     }
 
     /**
-     * Aprueba una solicitud de anticipo que esté en estado {@code PENDIENTE}.
+     * Busca el coordinador {@code ERLE_RECURSOS} del clúster al que pertenece un equipo ERL.
      *
-     * @param id ID de la solicitud a aprobar
+     * @param erleEquipoId ID del equipo ERLE (padre del ERL solicitante), puede ser {@code null}
+     * @return el usuario encontrado, o {@code null} si no hay coordinador configurado
+     */
+    private Usuario resolverCoordinadorErle(Integer erleEquipoId) {
+        if (erleEquipoId == null) return null;
+        return usuarioRepository.findFirstByEquipo_IdAndRol_Name(erleEquipoId, "ERLE_RECURSOS")
+                .orElse(null);
+    }
+
+    /**
+     * Cambia el estado de una solicitud de anticipo y registra la auditoría del aprobador.
+     *
+     * <p><strong>Transiciones permitidas:</strong></p>
+     * <ul>
+     *   <li><strong>ERLE:</strong> {@code PENDIENTE_ERLE → PENDIENTE_ENL} o {@code RECHAZADO},
+     *       solo sobre solicitudes de equipos de su propio clúster.</li>
+     *   <li><strong>ENL:</strong> {@code PENDIENTE_ENL → APROBADO} o {@code RECHAZADO}.</li>
+     * </ul>
+     *
+     * @param id      ID de la solicitud a modificar
+     * @param request nuevo estado y observaciones (obligatorias al rechazar)
      * @return DTO con el estado actualizado y mensaje de confirmación
+     * @throws IllegalArgumentException si la solicitud no existe, el estado destino es inválido
+     *                                   o faltan observaciones al rechazar
+     * @throws IllegalStateException    si el tipo de equipo no tiene permisos para esa transición,
+     *                                   o si el ERLE intenta actuar sobre una solicitud fuera de su clúster
      */
     @Transactional
-    public AnticipoResponse aprobarSolicitud(Integer id) {
+    public AnticipoResponse cambiarEstado(Integer id, CambiarEstadoRequest request) {
+        JwtAuthDetails details = obtenerDetails();
+        Integer equipoIdRevisor = details.equipoId();
+        String equipoTipo       = details.equipoTipo();
+
         SolicitudAnticipo solicitud = solicitudRepo.findById(id)
                 .orElseThrow(() -> new IllegalArgumentException("Solicitud no encontrada con id: " + id));
 
-        if (solicitud.getEstado() != EstadoSolicitud.PENDIENTE) {
-            throw new IllegalStateException("Solo se pueden aprobar solicitudes en estado PENDIENTE.");
+        EstadoSolicitud nuevoEstado;
+        try {
+            nuevoEstado = EstadoSolicitud.valueOf(request.nuevoEstado());
+        } catch (IllegalArgumentException e) {
+            throw new IllegalArgumentException(
+                    "Estado no válido: '" + request.nuevoEstado() +
+                    "'. Valores permitidos: PENDIENTE_ENL, APROBADO, RECHAZADO.");
         }
 
-        solicitud.setEstado(EstadoSolicitud.APROBADO);
-        solicitud.setFechaAprobacionFinal(LocalDateTime.now());
+        validarTransicionYPropiedad(solicitud, nuevoEstado, equipoTipo, equipoIdRevisor);
+
+        Integer revisorId = resolverUsuarioId();
+
+        if (nuevoEstado == EstadoSolicitud.RECHAZADO) {
+            if (request.observaciones() == null || request.observaciones().isBlank()) {
+                throw new IllegalArgumentException(
+                        "El campo 'observaciones' es obligatorio al rechazar una solicitud.");
+            }
+            solicitud.setMotivoRechazo(request.observaciones());
+            solicitud.setFechaRechazo(LocalDateTime.now());
+            solicitud.setRechazadoPorId(revisorId);
+        }
+
+        if ("ERLE".equals(equipoTipo)) {
+            solicitud.setAprobadorErleId(revisorId);
+            if (nuevoEstado == EstadoSolicitud.PENDIENTE_ENL) {
+                solicitud.setFechaAprobacionErle(LocalDateTime.now());
+            }
+        } else if ("ENL".equals(equipoTipo)) {
+            solicitud.setAprobadorEnlId(revisorId);
+            if (nuevoEstado == EstadoSolicitud.APROBADO) {
+                solicitud.setFechaAprobacionFinal(LocalDateTime.now());
+            }
+        }
+
+        solicitud.setEstado(nuevoEstado);
         solicitudRepo.save(solicitud);
 
-        String tituloSolicitud  = solicitud.getTitulo();
-        BigDecimal monto        = solicitud.getMontoSolicitado();
-        LocalDateTime fechaAprobacion = solicitud.getFechaAprobacionFinal();
-        Integer usuarioId       = solicitud.getUsuarioId();
+        notificarCambioEstado(solicitud, nuevoEstado, request.observaciones());
 
-        TransactionSynchronizationManager.registerSynchronization(new TransactionSynchronization() {
-            @Override
-            public void afterCommit() {
-                usuarioRepository.findById(usuarioId).ifPresent(solicitante ->
+        String mensaje = switch (nuevoEstado) {
+            case PENDIENTE_ENL -> "Solicitud aprobada por el ERLE y enviada al ENL para aprobación final.";
+            case APROBADO      -> "Solicitud aprobada exitosamente.";
+            case RECHAZADO     -> "Solicitud rechazada.";
+            default            -> "Solicitud actualizada.";
+        };
+        return new AnticipoResponse(solicitud.getId(), nuevoEstado.name(), mensaje, solicitud.getRutaPdf());
+    }
+
+    /**
+     * Valida que la transición de estado sea permitida para el tipo de equipo que
+     * realiza la acción, y que el ERLE solo actúe sobre solicitudes de su propio clúster.
+     *
+     * @throws IllegalStateException    si el estado actual no corresponde al paso del revisor,
+     *                                   o el ERLE no es dueño del clúster de la solicitud
+     * @throws IllegalArgumentException si el estado destino no está permitido para ese tipo
+     */
+    private void validarTransicionYPropiedad(SolicitudAnticipo solicitud, EstadoSolicitud nuevo,
+                                              String equipoTipo, Integer equipoIdRevisor) {
+        switch (equipoTipo) {
+            case "ERLE" -> {
+                if (solicitud.getEstado() != EstadoSolicitud.PENDIENTE_ERLE) {
+                    throw new IllegalStateException(
+                            "El ERLE solo puede gestionar solicitudes en estado PENDIENTE_ERLE. " +
+                            "Estado actual: " + solicitud.getEstado().name());
+                }
+                if (nuevo != EstadoSolicitud.PENDIENTE_ENL && nuevo != EstadoSolicitud.RECHAZADO) {
+                    throw new IllegalArgumentException(
+                            "El ERLE solo puede mover solicitudes a PENDIENTE_ENL o RECHAZADO.");
+                }
+                Equipo equipoSolicitante = equipoRepository.findById(solicitud.getEquipoId())
+                        .orElseThrow(() -> new IllegalStateException(
+                                "El equipo solicitante " + solicitud.getEquipoId() + " ya no existe."));
+                if (!equipoIdRevisor.equals(equipoSolicitante.getErleId())) {
+                    throw new IllegalStateException(
+                            "No tiene permisos sobre esta solicitud: el equipo solicitante " +
+                            "no pertenece a su clúster.");
+                }
+            }
+            case "ENL" -> {
+                if (solicitud.getEstado() != EstadoSolicitud.PENDIENTE_ENL) {
+                    throw new IllegalStateException(
+                            "El ENL solo puede gestionar solicitudes en estado PENDIENTE_ENL. " +
+                            "Estado actual: " + solicitud.getEstado().name());
+                }
+                if (nuevo != EstadoSolicitud.APROBADO && nuevo != EstadoSolicitud.RECHAZADO) {
+                    throw new IllegalArgumentException(
+                            "El ENL solo puede mover solicitudes a APROBADO o RECHAZADO.");
+                }
+            }
+            default -> throw new IllegalStateException(
+                    "El tipo de equipo '" + equipoTipo + "' no tiene permisos para cambiar " +
+                    "el estado de solicitudes de anticipo.");
+        }
+    }
+
+    /**
+     * Registra el envío de correo correspondiente al nuevo estado de una solicitud.
+     *
+     * <ul>
+     *   <li>{@code PENDIENTE_ENL} – notifica al ENL_RECURSOS que hay una nueva solicitud a revisar.</li>
+     *   <li>{@code APROBADO} – notifica al solicitante que su anticipo quedó aprobado.</li>
+     *   <li>{@code RECHAZADO} – notifica al solicitante con el motivo del rechazo.</li>
+     * </ul>
+     */
+    private void notificarCambioEstado(SolicitudAnticipo solicitud, EstadoSolicitud nuevoEstado,
+                                       String observaciones) {
+        Integer usuarioId      = solicitud.getUsuarioId();
+        String tituloSolicitud = solicitud.getTitulo();
+        BigDecimal monto       = solicitud.getMontoSolicitado();
+
+        if (nuevoEstado == EstadoSolicitud.PENDIENTE_ENL) {
+            Usuario aprobadorEnl = usuarioRepository.findFirstByRol_Name("ENL_RECURSOS").orElse(null);
+            if (aprobadorEnl == null) return;
+            String emailAprobador  = aprobadorEnl.getEmail();
+            String nombreAprobador = aprobadorEnl.getName();
+            usuarioRepository.findById(usuarioId).ifPresent(solicitante -> {
+                String nombreSolicitante   = solicitante.getName();
+                String apellidoSolicitante = solicitante.getLastname();
+                String tipo = solicitud.getTipoPresupuesto() != null ? solicitud.getTipoPresupuesto().name() : "";
+                TransactionSynchronizationManager.registerSynchronization(new TransactionSynchronization() {
+                    @Override
+                    public void afterCommit() {
                         emailService.enviarHtml(
-                                solicitante.getEmail(),
-                                "SIGLOCC - Solicitud aprobada: " + tituloSolicitud,
-                                "solicitud-aprobada",
+                                emailAprobador,
+                                "SIGLOCC - Nueva solicitud pendiente: " + tituloSolicitud,
+                                "nueva-solicitud-aprobador",
                                 Map.of(
-                                    "nombreSolicitante", solicitante.getName(),
+                                    "nombreAprobador", nombreAprobador,
+                                    "nombreSolicitante", nombreSolicitante,
+                                    "apellidoSolicitante", apellidoSolicitante,
                                     "tituloSolicitud", tituloSolicitud,
                                     "monto", monto,
-                                    "fechaAprobacion", fechaAprobacion
+                                    "tipo", tipo
                                 )
-                        )
-                );
-            }
-        });
+                        );
+                    }
+                });
+            });
+            return;
+        }
 
-        return new AnticipoResponse(solicitud.getId(), EstadoSolicitud.APROBADO.name(),
-                "Solicitud aprobada exitosamente.", solicitud.getRutaPdf());
+        if (nuevoEstado == EstadoSolicitud.APROBADO) {
+            LocalDateTime fechaAprobacion = solicitud.getFechaAprobacionFinal();
+            TransactionSynchronizationManager.registerSynchronization(new TransactionSynchronization() {
+                @Override
+                public void afterCommit() {
+                    usuarioRepository.findById(usuarioId).ifPresent(solicitante ->
+                            emailService.enviarHtml(
+                                    solicitante.getEmail(),
+                                    "SIGLOCC - Solicitud aprobada: " + tituloSolicitud,
+                                    "solicitud-aprobada",
+                                    Map.of(
+                                        "nombreSolicitante", solicitante.getName(),
+                                        "tituloSolicitud", tituloSolicitud,
+                                        "monto", monto,
+                                        "fechaAprobacion", fechaAprobacion
+                                    )
+                            )
+                    );
+                }
+            });
+            return;
+        }
+
+        if (nuevoEstado == EstadoSolicitud.RECHAZADO) {
+            TransactionSynchronizationManager.registerSynchronization(new TransactionSynchronization() {
+                @Override
+                public void afterCommit() {
+                    usuarioRepository.findById(usuarioId).ifPresent(solicitante ->
+                            emailService.enviarHtml(
+                                    solicitante.getEmail(),
+                                    "SIGLOCC - Solicitud rechazada: " + tituloSolicitud,
+                                    "solicitud-rechazada",
+                                    Map.of(
+                                        "nombreSolicitante", solicitante.getName(),
+                                        "tituloSolicitud", tituloSolicitud,
+                                        "motivo", observaciones
+                                    )
+                            )
+                    );
+                }
+            });
+        }
     }
 
     /**
@@ -324,16 +550,31 @@ public class AnticipoService {
     }
 
     /**
-     * Retorna todas las solicitudes de anticipo, de la más reciente a la más antigua.
+     * Retorna las solicitudes de anticipo visibles para el usuario autenticado,
+     * de la más reciente a la más antigua, con filtrado jerárquico automático.
      *
-     * <p>Es la bandeja completa a nivel nacional — pensada para {@code ENL_RECURSOS},
-     * único rol que puede aprobar. No filtra por jerarquía como reportes o dashboard
-     * porque hoy no existe un paso de aprobación a nivel ERLE en este módulo.</p>
+     * <ul>
+     *   <li><strong>ENL:</strong> todas las solicitudes, opcionalmente filtradas por temporada.</li>
+     *   <li><strong>ERLE:</strong> su propio equipo más todos los ERL de su clúster.</li>
+     * </ul>
      *
-     * @return lista completa de solicitudes con todos sus campos
+     * @param temporadaId ID de la temporada para filtrar, o {@code null} para no filtrar
+     * @return lista de solicitudes visibles con todos sus campos
+     * @throws IllegalStateException si el tipo de equipo no tiene acceso a este listado
      */
-    public List<AnticipoDetalleResponse> listarSolicitudes() {
-        return solicitudRepo.findAllByOrderByFechaSolicitudDesc().stream()
+    public List<AnticipoDetalleResponse> listarSolicitudes(Integer temporadaId) {
+        JwtAuthDetails details = obtenerDetails();
+        Integer equipoId  = details.equipoId();
+        String equipoTipo = details.equipoTipo();
+
+        List<SolicitudAnticipo> solicitudes = switch (equipoTipo) {
+            case "ENL"  -> solicitudRepo.findAllOpcionalmentePorTemporada(temporadaId);
+            case "ERLE" -> solicitudRepo.findByErleClusterOpcionalmentePorTemporada(equipoId, temporadaId);
+            default -> throw new IllegalStateException(
+                    "El tipo de equipo '" + equipoTipo + "' no tiene acceso al listado de anticipos.");
+        };
+
+        return solicitudes.stream()
                 .map(this::toDetalleResponse)
                 .toList();
     }
@@ -370,8 +611,40 @@ public class AnticipoService {
                 s.getTemporadaId(),
                 s.getUsuarioId(),
                 s.getFechaSolicitud(),
-                s.getFechaAprobacionFinal()
+                s.getAprobadorErleId(),
+                s.getFechaAprobacionErle(),
+                s.getAprobadorEnlId(),
+                s.getFechaAprobacionFinal(),
+                s.getRechazadoPorId(),
+                s.getFechaRechazo()
         );
+    }
+
+    /**
+     * Extrae el {@link JwtAuthDetails} del contexto de seguridad activo.
+     *
+     * @return detalles de identidad jerárquica del usuario autenticado
+     * @throws IdentidadJwtException si el token no contiene identidad jerárquica válida
+     */
+    private JwtAuthDetails obtenerDetails() {
+        Authentication auth = SecurityContextHolder.getContext().getAuthentication();
+        if (!(auth.getDetails() instanceof JwtAuthDetails details)) {
+            throw new IdentidadJwtException(
+                    "El token no contiene identidad jerárquica válida (equipoId/equipoTipo). Vuelve a iniciar sesión.");
+        }
+        return details;
+    }
+
+    /**
+     * Resuelve el ID del usuario autenticado buscando por el email del token JWT.
+     *
+     * @return ID del usuario autenticado, o {@code null} si no se encuentra
+     */
+    private Integer resolverUsuarioId() {
+        String email = SecurityContextHolder.getContext().getAuthentication().getName();
+        return usuarioRepository.findByEmail(email)
+                .map(Usuario::getId)
+                .orElse(null);
     }
 
     // ── Privados ──────────────────────────────────────────────────────────
